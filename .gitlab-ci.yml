@@ -1,0 +1,40 @@
+stages:
+  - lint
+  - test
+
+default:
+  image: python:3.11-slim
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends make libatomic1
+    - pip install uv
+    - make install
+
+.rules:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+lint:
+  stage: lint
+  extends: .rules
+  script:
+    - make lint
+    - make format-check
+
+typecheck:
+  stage: lint
+  extends: .rules
+  script:
+    - make typecheck
+
+typos:
+  stage: lint
+  extends: .rules
+  script:
+    - make typos
+
+test:
+  stage: test
+  extends: .rules
+  script:
+    - make test
