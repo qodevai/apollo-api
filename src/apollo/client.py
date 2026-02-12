@@ -457,6 +457,21 @@ class ApolloClient:
             page=page,
         )
 
+    async def list_all_stages(self) -> PaginatedResponse[Stage]:
+        """List all pipeline stages across all pipelines.
+
+        Returns:
+            Paginated response with all Stage items (unfiltered)
+        """
+        result = await self._get("/opportunity_stages")
+        stages = [Stage.model_validate(s) for s in result.get("opportunity_stages", [])]
+
+        return PaginatedResponse[Stage](
+            items=stages,
+            total=len(stages),
+            page=1,
+        )
+
     # ========================================================================
     # ENRICHMENT
     # ========================================================================

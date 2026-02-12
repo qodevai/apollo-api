@@ -175,6 +175,7 @@ class Stage(BaseModel):
     is_closed: bool | None = None
     description: str | None = None
     is_editable: bool | None = None
+    opportunity_pipeline_id: str | None = None
 
 
 # ============================================================================
