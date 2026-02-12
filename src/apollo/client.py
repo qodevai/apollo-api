@@ -208,6 +208,19 @@ class ApolloClient:
         }
         return await self._post("/contacts", data)
 
+    async def update_contact(self, contact_id: str, **fields) -> Contact:
+        """Update a contact's fields.
+
+        Args:
+            contact_id: Contact ID
+            **fields: Fields to update (e.g., label_ids, title, etc.)
+
+        Returns:
+            Updated Contact model
+        """
+        result = await self._request("PUT", f"/contacts/{contact_id}", json=fields)
+        return Contact.model_validate(result.get("contact", {}))
+
     async def get_contact_stages(self) -> list[dict]:
         """Get all contact stages.
 
@@ -722,3 +735,16 @@ class ApolloClient:
         """
         result = await self._get(f"/accounts/{account_id}/job_postings")
         return result.get("job_postings", [])
+
+    # ========================================================================
+    # USAGE & RATE LIMITS
+    # ========================================================================
+
+    async def get_api_usage(self) -> dict[str, dict]:
+        """Get API usage stats across all endpoints.
+
+        Returns:
+            Dictionary keyed by endpoint (e.g. '["api/v1/accounts", "search"]')
+            with day/hour/minute limits, consumed, and left_over counts.
+        """
+        return await self._post("/usage_stats/api_usage_stats", {})

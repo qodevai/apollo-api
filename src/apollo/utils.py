@@ -15,6 +15,9 @@ def prosemirror_to_markdown(content_json: str) -> tuple[str, str]:
     Returns:
         Tuple of (title, markdown_content)
     """
+    if not content_json:
+        return "Untitled", ""
+
     try:
         doc = json.loads(content_json)
     except json.JSONDecodeError:
@@ -112,7 +115,9 @@ def normalize_linkedin_url(url: str) -> str:
     if not url:
         return ""
     url = url.lower().strip().rstrip("/")
-    # Ensure it starts with http:// or https://
-    if not url.startswith(("http://", "https://")):
+    # Normalize scheme to https://
+    if url.startswith("http://"):
+        url = "https://" + url[7:]
+    elif not url.startswith("https://"):
         url = f"https://{url}"
     return url

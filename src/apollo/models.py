@@ -30,6 +30,7 @@ class Contact(BaseModel):
     location: str | None = None
     phone_numbers: list[dict] = Field(default_factory=list)
     linkedin_url: str | None = None
+    label_ids: list[str] = Field(default_factory=list)
     last_activity: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
