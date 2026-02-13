@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -639,6 +640,22 @@ class Call(ApolloModel):
     # CRM Integration
     hubspot_id: str | None = None
     salesforce_id: str | None = None
+
+
+class TaskType(StrEnum):
+    """Task type codes used by the Apollo API."""
+
+    CALL = "call"
+    ACCOUNT_CALL = "account_call"
+    CONTACT_CALL = "contact_call"
+    OUTREACH_MANUAL_EMAIL = "outreach_manual_email"
+    LINKEDIN_STEP_CONNECT = "linkedin_step_connect"
+    LINKEDIN_STEP_MESSAGE = "linkedin_step_message"
+    LINKEDIN_STEP_INTERACT = "linkedin_step_interact_post"
+    LINKEDIN_STEP_VIEW_PROFILE = "linkedin_step_view_profile"
+    LINKEDIN_ACTIONS = "linkedin_actions"
+    CONTACT_ACTION_ITEM = "contact_action_item"
+    ACCOUNT_ACTION_ITEM = "account_action_item"
 
 
 class Task(ApolloModel):

@@ -5,6 +5,7 @@ Type-safe async wrapper for Apollo.io API.
 
 import os
 from types import TracebackType
+from typing import Any
 
 import httpx
 
@@ -22,6 +23,7 @@ from .models import (
     Pipeline,
     Stage,
     Task,
+    TaskType,
 )
 from .utils import normalize_linkedin_url, prosemirror_to_markdown
 
@@ -610,19 +612,30 @@ class ApolloClient:
         )
 
     async def search_tasks(
-        self, page: int = 1, limit: int = 100, **filters
+        self,
+        page: int = 1,
+        limit: int = 100,
+        task_type_cds: list[TaskType | str] | None = None,
+        **filters,
     ) -> PaginatedResponse[Task]:
         """Search task activities.
 
         Args:
             page: Page number (default 1)
             limit: Results per page (default 100, max 100)
+            task_type_cds: Filter by task type codes. Valid values:
+                call, account_call, contact_call, outreach_manual_email,
+                linkedin_step_connect, linkedin_step_message,
+                linkedin_step_interact_post, linkedin_step_view_profile,
+                linkedin_actions, contact_action_item, account_action_item
             **filters: Additional filters
 
         Returns:
             Paginated response with Task items
         """
         data = {"page": page, "per_page": min(limit, 100), **filters}
+        if task_type_cds is not None:
+            data["task_type_cds"] = task_type_cds
         result = await self._post("/tasks/search", data)
 
         tasks = [Task.model_validate(t) for t in result.get("tasks", [])]
@@ -687,6 +700,21 @@ class ApolloClient:
             **fields,
         }
         return await self._post("/tasks", data)
+
+    async def complete_task(self, task_id: str, note: str | None = None) -> dict:
+        """Mark a task as completed.
+
+        Args:
+            task_id: Task ID to complete
+            note: Optional note/message to attach on completion
+
+        Returns:
+            Raw API response
+        """
+        data: dict[str, Any] = {}
+        if note is not None:
+            data["note"] = note
+        return await self._post(f"/tasks/{task_id}/complete", data)
 
     async def list_contact_calls(self, contact_id: str) -> list[dict]:
         """List calls for a contact.

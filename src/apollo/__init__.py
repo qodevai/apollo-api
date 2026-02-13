@@ -31,6 +31,7 @@ from .models import (
     Pipeline,
     Stage,
     Task,
+    TaskType,
     Technology,
 )
 
@@ -65,6 +66,7 @@ __all__ = [
     "RateLimitError",
     "Stage",
     "Task",
+    "TaskType",
     "Technology",
 ]
 
