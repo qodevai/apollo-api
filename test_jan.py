@@ -28,9 +28,9 @@ async def main():
             print(f"  Name: {contact.name}")
             print(f"  Email: {contact.email}")
             print(f"  Title: {contact.title}")
-            print(f"  Company: {contact.company}")
+            print(f"  Company: {contact.organization_name}")
             print(f"  LinkedIn: {contact.linkedin_url}")
-            print(f"  Stage: {contact.stage}")
+            print(f"  Stage: {contact.contact_stage_id}")
 
             if contact.phone_numbers:
                 print(f"  Phone Numbers: {contact.phone_numbers}")
@@ -38,7 +38,7 @@ async def main():
             # Try to get full contact details
             print(f"\nFetching full contact details...")
             full_contact = await client.get_contact(contact.id)
-            print(f"  Location: {full_contact.location}")
+            print(f"  City: {full_contact.city}")
             print(f"  Account ID: {full_contact.account_id}")
             print(f"  Created: {full_contact.created_at}")
 

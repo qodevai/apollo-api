@@ -11,8 +11,10 @@ import httpx
 from .exceptions import APIError, AuthenticationError, RateLimitError
 from .models import (
     Account,
+    AccountDetail,
     Call,
     Contact,
+    ContactDetail,
     Deal,
     Email,
     Note,
@@ -110,12 +112,12 @@ class ApolloClient:
             # Track rate limits from headers
             headers = response.headers
             self._rate_limit_status = {
-                "hourly_limit": int(headers.get("x-rate-limit-hourly", 0)),
-                "hourly_left": int(headers.get("x-hourly-requests-left", 0)),
-                "minute_limit": int(headers.get("x-rate-limit-minute", 0)),
-                "minute_left": int(headers.get("x-minute-requests-left", 0)),
-                "daily_limit": int(headers.get("x-rate-limit-24-hour", 0)),
-                "daily_left": int(headers.get("x-24-hour-requests-left", 0)),
+                "hourly_limit": int(headers.get("x-rate-limit-hourly") or 0),
+                "hourly_left": int(headers.get("x-hourly-requests-left") or 0),
+                "minute_limit": int(headers.get("x-rate-limit-minute") or 0),
+                "minute_left": int(headers.get("x-minute-requests-left") or 0),
+                "daily_limit": int(headers.get("x-rate-limit-24-hour") or 0),
+                "daily_left": int(headers.get("x-24-hour-requests-left") or 0),
             }
 
             response.raise_for_status()
@@ -173,17 +175,17 @@ class ApolloClient:
             page=page,
         )
 
-    async def get_contact(self, contact_id: str) -> Contact:
+    async def get_contact(self, contact_id: str) -> ContactDetail:
         """Get contact details by ID.
 
         Args:
             contact_id: Contact ID
 
         Returns:
-            Contact model
+            ContactDetail model (includes employment_history and other detail-only fields)
         """
         result = await self._get(f"/contacts/{contact_id}")
-        return Contact.model_validate(result.get("contact", {}))
+        return ContactDetail.model_validate(result.get("contact", {}))
 
     async def create_contact(
         self,
@@ -339,17 +341,17 @@ class ApolloClient:
             page=page,
         )
 
-    async def get_account(self, account_id: str) -> Account:
+    async def get_account(self, account_id: str) -> AccountDetail:
         """Get account details by ID.
 
         Args:
             account_id: Account ID
 
         Returns:
-            Account model
+            AccountDetail model (includes enrichment data, tech stack, org chart, etc.)
         """
         result = await self._get(f"/accounts/{account_id}")
-        return Account.model_validate(result.get("account", {}))
+        return AccountDetail.model_validate(result.get("account", {}))
 
     # ========================================================================
     # DEALS / OPPORTUNITIES
@@ -537,24 +539,11 @@ class ApolloClient:
 
         notes = []
         for note_data in result.get("notes", []):
-            # Convert ProseMirror JSON to Markdown
+            # Convert ProseMirror JSON to Markdown, pass as overrides (don't mutate original)
             content_json = note_data.get("content", "{}")
             title, markdown = prosemirror_to_markdown(content_json)
 
-            notes.append(
-                Note(
-                    id=note_data.get("id"),
-                    title=title,
-                    content=markdown,
-                    created_at=note_data.get("created_at"),
-                    updated_at=note_data.get("updated_at"),
-                    user_id=note_data.get("user_id"),
-                    contact_ids=note_data.get("contact_ids", []),
-                    account_ids=note_data.get("account_ids", []),
-                    opportunity_ids=note_data.get("opportunity_ids", []),
-                    pinned_to_top=note_data.get("pinned_to_top", False),
-                )
-            )
+            notes.append(Note.model_validate({**note_data, "title": title, "content": markdown}))
 
         pagination = result.get("pagination", {})
         return PaginatedResponse[Note](
