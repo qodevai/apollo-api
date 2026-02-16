@@ -733,6 +733,10 @@ class Call(ApolloModel):
     hubspot_id: str | None = None
     salesforce_id: str | None = None
 
+    # Timestamps
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
 
 class TaskType(StrEnum):
     """Task type codes used by the Apollo API."""
@@ -849,7 +853,7 @@ class Email(ApolloModel):
     replied: bool | None = None
     reply_class: str | None = None
     demoed: bool | None = None
-    bounce: str | None = None
+    bounce: str | bool | None = None
     spam_blocked: bool | None = None
     personalized_opener: str | None = None
 
