@@ -5,21 +5,31 @@ from datetime import datetime
 from apollo.models import (
     Account,
     AccountDetail,
+    AccountPlaybookStatus,
+    AccountQueue,
     ApolloModel,
     Call,
     Contact,
     ContactCampaignStatus,
     ContactDetail,
+    ContactEmailEntry,
+    ContactJobChangeEvent,
+    ContactRole,
+    ContactRuleConfigStatus,
     CrmJob,
     CrmNote,
     Currency,
     Deal,
     Email,
+    EmailerMessage,
     EmailParticipant,
     EmploymentHistory,
     EngagementData,
+    EngagementGraphEntry,
+    EngagementTypeCount,
     Note,
     OpportunityContactRole,
+    OpportunityRoleEntry,
     OrganizationRef,
     PaginatedResponse,
     PhoneEntry,
@@ -67,6 +77,18 @@ def test_contact_model_optional_fields():
     assert contact.id == "test_id"
     assert contact.name is None
     assert contact.email is None
+
+
+def test_contact_custom_field_errors_nullable():
+    """Test custom_field_errors accepts None from API (field is null in embedded responses)."""
+    contact = Contact.model_validate({"id": "c1", "custom_field_errors": None})
+    assert contact.custom_field_errors is None
+
+
+def test_contact_custom_field_errors_default():
+    """Test custom_field_errors defaults to None when absent."""
+    contact = Contact.model_validate({"id": "c1"})
+    assert contact.custom_field_errors is None
 
 
 def test_contact_extra_fields():
@@ -123,6 +145,95 @@ def test_contact_with_embedded_account():
     )
     assert isinstance(contact.account, Account)
     assert contact.account.name == "Acme Corp"
+
+
+def test_contact_with_contact_emails():
+    """Test Contact deserializes contact_emails into ContactEmailEntry models."""
+    contact = Contact.model_validate(
+        {
+            "id": "c1",
+            "contact_emails": [
+                {
+                    "email": "test@example.com",
+                    "email_status": "verified",
+                    "position": 0,
+                    "free_domain": False,
+                    "source": "Apollo",
+                },
+            ],
+        }
+    )
+    assert len(contact.contact_emails) == 1
+    assert isinstance(contact.contact_emails[0], ContactEmailEntry)
+    assert contact.contact_emails[0].email == "test@example.com"
+    assert contact.contact_emails[0].email_status == "verified"
+    assert contact.contact_emails[0].position == 0
+
+
+def test_contact_with_contact_roles():
+    """Test Contact deserializes contact_roles into ContactRole models."""
+    contact = Contact.model_validate(
+        {
+            "id": "c1",
+            "contact_roles": [{"id": "r1", "name": "Decision Maker"}],
+        }
+    )
+    assert len(contact.contact_roles) == 1
+    assert isinstance(contact.contact_roles[0], ContactRole)
+    assert contact.contact_roles[0].name == "Decision Maker"
+
+
+def test_contact_with_organization():
+    """Test Contact deserializes organization into Account model."""
+    contact = Contact.model_validate(
+        {
+            "id": "c1",
+            "organization": {
+                "id": "org1",
+                "name": "Acme Corp",
+                "website_url": "https://acme.com",
+                "primary_domain": "acme.com",
+                "founded_year": 2010,
+            },
+        }
+    )
+    assert isinstance(contact.organization, Account)
+    assert contact.organization.name == "Acme Corp"
+    assert contact.organization.founded_year == 2010
+
+
+def test_contact_with_job_change_event():
+    """Test Contact deserializes contact_job_change_event into ContactJobChangeEvent."""
+    contact = Contact.model_validate(
+        {
+            "id": "c1",
+            "contact_job_change_event": {
+                "id": "jce1",
+                "contact_id": "c1",
+                "title": "VP Engineering",
+                "old_title": "Senior Engineer",
+                "new_organization_name": "New Corp",
+                "is_processed": True,
+                "is_dismissed": False,
+            },
+        }
+    )
+    assert isinstance(contact.contact_job_change_event, ContactJobChangeEvent)
+    assert contact.contact_job_change_event.title == "VP Engineering"
+    assert contact.contact_job_change_event.old_title == "Senior Engineer"
+    assert contact.contact_job_change_event.is_processed is True
+
+
+def test_contact_with_rule_config_statuses():
+    """Test Contact deserializes contact_rule_config_statuses."""
+    contact = Contact.model_validate(
+        {
+            "id": "c1",
+            "contact_rule_config_statuses": [{"id": "rcs1", "status": "active"}],
+        }
+    )
+    assert len(contact.contact_rule_config_statuses) == 1
+    assert isinstance(contact.contact_rule_config_statuses[0], ContactRuleConfigStatus)
 
 
 def test_contact_datetime_fields():
@@ -249,6 +360,21 @@ def test_account_with_primary_phone():
     assert account.primary_phone.number == "+1234567890"
 
 
+def test_account_with_playbook_statuses():
+    """Test Account deserializes account_playbook_statuses into typed models."""
+    account = Account.model_validate(
+        {
+            "id": "a1",
+            "account_playbook_statuses": [
+                {"id": "ps1", "status": "active", "playbook_id": "pb1"},
+            ],
+        }
+    )
+    assert len(account.account_playbook_statuses) == 1
+    assert isinstance(account.account_playbook_statuses[0], AccountPlaybookStatus)
+    assert account.account_playbook_statuses[0].playbook_id == "pb1"
+
+
 # ============================================================================
 # ACCOUNT DETAIL
 # ============================================================================
@@ -322,6 +448,19 @@ def test_account_detail_with_org_refs():
     assert isinstance(detail.suborganizations[0], OrganizationRef)
 
 
+def test_account_detail_with_queues():
+    """Test AccountDetail deserializes account_queues into AccountQueue models."""
+    detail = AccountDetail.model_validate(
+        {
+            "id": "a1",
+            "account_queues": [{"id": "q1", "name": "Sales Queue"}],
+        }
+    )
+    assert len(detail.account_queues) == 1
+    assert isinstance(detail.account_queues[0], AccountQueue)
+    assert detail.account_queues[0].name == "Sales Queue"
+
+
 # ============================================================================
 # DEAL
 # ============================================================================
@@ -360,18 +499,32 @@ def test_deal_with_currency():
 
 
 def test_deal_with_contact_roles():
-    """Test Deal deserializes opportunity_contact_roles."""
+    """Test Deal deserializes opportunity_contact_roles with typed role entries."""
     deal = Deal.model_validate(
         {
             "id": "d1",
             "opportunity_contact_roles": [
-                {"id": "r1", "contact_id": "c1", "is_primary": True},
+                {
+                    "id": "r1",
+                    "contact_id": "c1",
+                    "is_primary": True,
+                    "role": [
+                        {
+                            "opportunity_contact_role_type_id": "type1",
+                            "is_primary": True,
+                            "crm_role_id": None,
+                        },
+                    ],
+                },
             ],
         }
     )
     assert len(deal.opportunity_contact_roles) == 1
     assert isinstance(deal.opportunity_contact_roles[0], OpportunityContactRole)
     assert deal.opportunity_contact_roles[0].is_primary is True
+    assert len(deal.opportunity_contact_roles[0].role) == 1
+    assert isinstance(deal.opportunity_contact_roles[0].role[0], OpportunityRoleEntry)
+    assert deal.opportunity_contact_roles[0].role[0].opportunity_contact_role_type_id == "type1"
 
 
 def test_deal_with_embedded_account():
@@ -515,19 +668,61 @@ def test_task_model():
 
 
 def test_task_with_engagement_data():
-    """Test Task deserializes engagement_data into EngagementData model."""
+    """Test Task deserializes engagement_data with typed types_count."""
     task = Task.model_validate(
         {
             "id": "t1",
             "engagement_data": {
                 "_id": "ed1",
-                "types_count": [{"type": "email", "count": 5}],
+                "types_count": [
+                    {"type_cd": "open", "count": 3},
+                    {"type_cd": "reply", "count": 1},
+                ],
                 "last_engagement_date": "2025-02-14T10:33:27.000Z",
             },
         }
     )
     assert isinstance(task.engagement_data, EngagementData)
     assert isinstance(task.engagement_data.last_engagement_date, datetime)
+    assert len(task.engagement_data.types_count) == 2
+    assert isinstance(task.engagement_data.types_count[0], EngagementTypeCount)
+    assert task.engagement_data.types_count[0].type_cd == "open"
+    assert task.engagement_data.types_count[0].count == 3
+
+
+def test_task_with_emailer_message():
+    """Test Task deserializes emailer_message into EmailerMessage model."""
+    task = Task.model_validate(
+        {
+            "id": "t1",
+            "emailer_message": {
+                "id": "em1",
+                "subject": "Follow up",
+                "status": "drafted",
+                "to_email": "test@example.com",
+                "from_email": "sender@example.com",
+            },
+        }
+    )
+    assert isinstance(task.emailer_message, EmailerMessage)
+    assert task.emailer_message.subject == "Follow up"
+    assert task.emailer_message.to_email == "test@example.com"
+
+
+def test_task_emailer_message_without_id():
+    """Test EmailerMessage accepts missing id (drafts may lack one)."""
+    task = Task.model_validate(
+        {
+            "id": "t1",
+            "emailer_message": {
+                "subject": "Draft",
+                "status": "drafted",
+            },
+        }
+    )
+    assert isinstance(task.emailer_message, EmailerMessage)
+    assert task.emailer_message.id is None
+    assert task.emailer_message.subject == "Draft"
 
 
 # ============================================================================
@@ -566,6 +761,39 @@ def test_email_with_participants():
     assert len(email.recipients) == 2
     assert isinstance(email.recipients[0], EmailParticipant)
     assert email.recipients[1].recipient_type_cd == "cc"
+
+
+# ============================================================================
+# ENGAGEMENT GRAPH
+# ============================================================================
+
+
+def test_engagement_graph_entry():
+    """Test EngagementGraphEntry model validation."""
+    entry = EngagementGraphEntry.model_validate(
+        {"year": 2025, "month": 6, "inbound": 3, "outbound": 7}
+    )
+    assert entry.year == 2025
+    assert entry.month == 6
+    assert entry.inbound == 3
+    assert entry.outbound == 7
+
+
+def test_contact_detail_with_engagement_graph():
+    """Test ContactDetail deserializes engagement_graph into EngagementGraphEntry list."""
+    detail = ContactDetail.model_validate(
+        {
+            "id": "c1",
+            "engagement_graph": [
+                {"year": 2025, "month": 1, "inbound": 2, "outbound": 5},
+                {"year": 2025, "month": 2, "inbound": 0, "outbound": 3},
+            ],
+        }
+    )
+    assert detail.engagement_graph is not None
+    assert len(detail.engagement_graph) == 2
+    assert isinstance(detail.engagement_graph[0], EngagementGraphEntry)
+    assert detail.engagement_graph[0].outbound == 5
 
 
 # ============================================================================

@@ -52,6 +52,89 @@ class EmailParticipant(ApolloModel):
     user_id: str | None = None
 
 
+class ContactEmailEntry(ApolloModel):
+    """Email entry in Contact.contact_emails list."""
+
+    email: str | None = None
+    email_md5: str | None = None
+    email_sha256: str | None = None
+    email_status: str | None = None
+    email_true_status: str | None = None
+    email_status_unavailable_reason: str | None = None
+    extrapolated_email_confidence: float | None = None
+    free_domain: bool | None = None
+    position: int | None = None
+    source: str | None = None
+    third_party_vendor_name: str | None = None
+    email_needs_tickling: bool | None = None
+
+
+class ContactRole(ApolloModel):
+    """Role entry in Contact.contact_roles list."""
+
+    id: str | None = None
+    name: str | None = None
+
+
+class ContactRuleConfigStatus(ApolloModel):
+    """Rule config status in Contact.contact_rule_config_statuses list."""
+
+    id: str | None = None
+    status: str | None = None
+
+
+class ContactJobChangeEvent(ApolloModel):
+    """Job change event data for a contact."""
+
+    id: str | None = None
+    person_id: str | None = None
+    contact_id: str | None = None
+    account_id: str | None = None
+    contact_name: str | None = None
+    title: str | None = None
+    old_title: str | None = None
+    old_organization_id: str | None = None
+    new_organization_id: str | None = None
+    new_organization_name: str | None = None
+    new_organization_domain: str | None = None
+    account_name: str | None = None
+    is_processed: bool | None = None
+    is_dismissed: bool | None = None
+    charged: bool | None = None
+    created_at: datetime | None = None
+
+
+class AccountPlaybookStatus(ApolloModel):
+    """Playbook status entry in Account.account_playbook_statuses list."""
+
+    id: str | None = None
+    status: str | None = None
+    playbook_id: str | None = None
+
+
+class AccountQueue(ApolloModel):
+    """Queue entry in AccountDetail.account_queues list."""
+
+    id: str | None = None
+    name: str | None = None
+
+
+class OpportunityRoleEntry(ApolloModel):
+    """Role entry within OpportunityContactRole.role list."""
+
+    opportunity_contact_role_type_id: str | None = None
+    crm_role_id: str | None = None
+    is_primary: bool | None = None
+    crm_id: str | None = None
+
+
+class EngagementTypeCount(ApolloModel):
+    """Engagement type count entry in EngagementData.types_count."""
+
+    type_cd: str | None = None
+    count: int | None = None
+
+
 class Technology(ApolloModel):
     """Technology stack entry (used in AccountDetail.current_technologies)."""
 
@@ -95,7 +178,7 @@ class OpportunityContactRole(ApolloModel):
     contact_id: str | None = None
     is_primary: bool | None = None
     # API returns role as list of nested role objects, not plain strings
-    role: list[dict[str, Any]] = Field(default_factory=list)
+    role: list[OpportunityRoleEntry] = Field(default_factory=list)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -129,7 +212,7 @@ class CrmJob(ApolloModel):
 class EngagementData(ApolloModel):
     """Engagement summary data."""
 
-    types_count: list[dict[str, Any]] = Field(default_factory=list)
+    types_count: list[EngagementTypeCount] = Field(default_factory=list)
     last_engagement_date: datetime | None = None
 
 
@@ -176,9 +259,9 @@ class Contact(ApolloModel):
     original_source: str | None = None
     source_display_name: str | None = None
     existence_level: str | None = None
-    contact_roles: list[dict[str, Any]] = Field(default_factory=list)
+    contact_roles: list[ContactRole] = Field(default_factory=list)
     typed_custom_fields: dict[str, Any] = Field(default_factory=dict)
-    custom_field_errors: dict[str, Any] = Field(default_factory=dict)
+    custom_field_errors: dict[str, Any] | None = None
 
     # Email
     email_status: str | None = None
@@ -191,7 +274,7 @@ class Contact(ApolloModel):
     email_status_unavailable_reason: str | None = None
     email_domain_catchall: bool | None = None
     free_domain: bool | None = None
-    contact_emails: list[dict[str, Any]] = Field(default_factory=list)
+    contact_emails: list[ContactEmailEntry] = Field(default_factory=list)
     extrapolated_email_confidence: float | None = None
     has_pending_email_arcgate_request: bool | None = None
     has_email_arcgate_request: bool | None = None
@@ -226,8 +309,8 @@ class Contact(ApolloModel):
     emailer_campaign_ids: list[str] = Field(default_factory=list)
     contact_campaign_statuses: list[ContactCampaignStatus] = Field(default_factory=list)
 
-    # Organization (nested, same shape as Account but may be partial)
-    organization: dict[str, Any] | None = None
+    # Organization (nested, same shape as Account — all Account fields are optional)
+    organization: Account | None = None
 
     # CRM Integration
     salesforce_id: str | None = None
@@ -243,9 +326,9 @@ class Contact(ApolloModel):
     queued_for_crm_push: bool | None = None
 
     # System
-    contact_rule_config_statuses: list[dict[str, Any]] = Field(default_factory=list)
+    contact_rule_config_statuses: list[ContactRuleConfigStatus] = Field(default_factory=list)
     suggested_from_rule_engine_config_id: str | None = None
-    contact_job_change_event: dict[str, Any] | None = None
+    contact_job_change_event: ContactJobChangeEvent | None = None
     person_deleted: bool | None = None
     call_opted_out: bool | None = None
 
@@ -320,7 +403,7 @@ class Account(ApolloModel):
     source_display_name: str | None = None
     label_ids: list[str] = Field(default_factory=list)
     typed_custom_fields: dict[str, Any] = Field(default_factory=dict)
-    custom_field_errors: dict[str, Any] = Field(default_factory=dict)
+    custom_field_errors: dict[str, Any] | None = None
     team_id: str | None = None
     parent_account_id: str | None = None
 
@@ -371,7 +454,7 @@ class Account(ApolloModel):
     num_contacts: int | None = None
     contact_emailer_campaign_ids: list[str] = Field(default_factory=list)
     contact_campaign_status_tally: dict[str, int] = Field(default_factory=dict)
-    account_playbook_statuses: list[dict[str, Any]] = Field(default_factory=list)
+    account_playbook_statuses: list[AccountPlaybookStatus] = Field(default_factory=list)
     intent_strength: str | None = None
     show_intent: bool | None = None
     suggested_from_rule_engine_config_id: str | None = None
@@ -426,7 +509,7 @@ class AccountDetail(Account):
     owned_by_organization: OrganizationRef | None = None
 
     # Detail-only metadata
-    account_queues: list[dict[str, Any]] = Field(default_factory=list)
+    account_queues: list[AccountQueue] = Field(default_factory=list)
     disable_flag: bool | None = None
     engagement_graph: list[EngagementGraphEntry] | None = None
     snippets_loaded: bool | None = None
@@ -694,7 +777,7 @@ class Task(ApolloModel):
 
     # Campaign & Automation
     emailer_campaign_id: str | None = None
-    emailer_message: dict[str, Any] | None = None
+    emailer_message: EmailerMessage | None = None
     engagement_data: EngagementData | None = None
     playbook_id: str | None = None
     playbook_step_ids: list[str] = Field(default_factory=list)
@@ -800,6 +883,12 @@ class Email(ApolloModel):
 
     # Timestamps
     created_at: datetime | None = None
+
+
+class EmailerMessage(Email):
+    """Embedded email message within a Task (may lack id when in draft state)."""
+
+    id: str | None = None
 
 
 # ============================================================================
