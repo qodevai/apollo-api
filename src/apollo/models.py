@@ -133,6 +133,15 @@ class EngagementData(ApolloModel):
     last_engagement_date: datetime | None = None
 
 
+class EngagementGraphEntry(ApolloModel):
+    """Monthly engagement activity counts for a contact or account."""
+
+    year: int
+    month: int
+    inbound: int = 0
+    outbound: int = 0
+
+
 # ============================================================================
 # CONTACT MODELS
 # ============================================================================
@@ -278,7 +287,7 @@ class ContactDetail(Contact):
     employment_history: list[EmploymentHistory] = Field(default_factory=list)
     crm_job: CrmJob | None = None
     disable_flag: bool | None = None
-    engagement_graph: list[dict[str, Any]] | None = None
+    engagement_graph: list[EngagementGraphEntry] | None = None
     next_contact_id: str | None = None
 
 
@@ -419,7 +428,7 @@ class AccountDetail(Account):
     # Detail-only metadata
     account_queues: list[dict[str, Any]] = Field(default_factory=list)
     disable_flag: bool | None = None
-    engagement_graph: list[dict[str, Any]] | None = None
+    engagement_graph: list[EngagementGraphEntry] | None = None
     snippets_loaded: bool | None = None
 
 
