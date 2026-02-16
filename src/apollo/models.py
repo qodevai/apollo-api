@@ -887,6 +887,8 @@ class Email(ApolloModel):
 
     # Timestamps
     created_at: datetime | None = None
+    sent_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class EmailerMessage(Email):
