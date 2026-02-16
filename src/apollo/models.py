@@ -261,7 +261,7 @@ class Contact(ApolloModel):
     existence_level: str | None = None
     contact_roles: list[ContactRole] = Field(default_factory=list)
     typed_custom_fields: dict[str, Any] = Field(default_factory=dict)
-    custom_field_errors: dict[str, Any] | None = None
+    custom_field_errors: dict[str, Any] | list[Any] | None = None
 
     # Email
     email_status: str | None = None
@@ -403,7 +403,7 @@ class Account(ApolloModel):
     source_display_name: str | None = None
     label_ids: list[str] = Field(default_factory=list)
     typed_custom_fields: dict[str, Any] = Field(default_factory=dict)
-    custom_field_errors: dict[str, Any] | None = None
+    custom_field_errors: dict[str, Any] | list[Any] | None = None
     team_id: str | None = None
     parent_account_id: str | None = None
 
