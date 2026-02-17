@@ -14,6 +14,7 @@ from .models import (
     Account,
     AccountDetail,
     Call,
+    CalendarEvent,
     Contact,
     ContactDetail,
     Deal,
@@ -739,6 +740,35 @@ class ApolloClient:
         """
         result = await self._get(f"/contacts/{contact_id}/tasks")
         return result.get("tasks", [])
+
+    # ========================================================================
+    # CALENDAR EVENTS
+    # ========================================================================
+
+    async def search_calendar_events(
+        self, page: int = 1, limit: int = 100, **filters
+    ) -> PaginatedResponse[CalendarEvent]:
+        """Search calendar events.
+
+        Args:
+            page: Page number (default 1)
+            limit: Results per page (default 100, max 100)
+            **filters: Additional filters
+
+        Returns:
+            Paginated response with CalendarEvent items
+        """
+        data = {"page": page, "per_page": min(limit, 100), **filters}
+        result = await self._post("/calendar_events/search", data)
+
+        events = [CalendarEvent.model_validate(e) for e in result.get("calendar_events", [])]
+        pagination = result.get("pagination", {})
+
+        return PaginatedResponse[CalendarEvent](
+            items=events,
+            total=pagination.get("total_entries", len(events)),
+            page=page,
+        )
 
     # ========================================================================
     # NEWS & JOBS

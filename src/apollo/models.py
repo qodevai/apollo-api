@@ -902,6 +902,39 @@ class EmailerMessage(Email):
 # ============================================================================
 
 
+class CalendarEventParticipant(ApolloModel):
+    """Participant entry in CalendarEvent.participants list."""
+
+    id: str
+    contact_id: str | None = None
+    email: str | None = None
+    name: str | None = None
+    domain: str | None = None
+    response_status_cd: str | None = None
+    booked_by: str | bool | None = None
+    attended_conversation: str | bool | None = None
+    auto_extracted: str | bool | None = None
+    is_additional_guest: bool | None = None
+    user_id: str | None = None
+    time_zone: str | None = None
+
+
+class CalendarEvent(ApolloModel):
+    """Calendar event model with participant list."""
+
+    id: str
+    user_id: str | None = None
+    title: str | None = None
+    description: str | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    salesforce_id: str | None = None
+    contact_id: str | None = None
+    participants: list[CalendarEventParticipant] = Field(default_factory=list)
+    external_id: str | None = None
+    participants_str: str | None = None
+
+
 class NewsArticle(BaseModel):
     """News article model."""
 
