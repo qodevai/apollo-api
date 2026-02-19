@@ -738,6 +738,13 @@ class Call(ApolloModel):
     updated_at: datetime | None = None
 
 
+class SortOrder(StrEnum):
+    """Sort direction for search queries."""
+
+    ASC = "asc"
+    DESC = "desc"
+
+
 class TaskPriority(StrEnum):
     """Task priority levels."""
 
@@ -810,6 +817,7 @@ class Task(ApolloModel):
     answered: bool | None = None
 
     # Automation
+    linkedin_emailer_template: LinkedInTemplate | None = None
     playbook_id: str | None = None
     playbook_step_ids: list[str] = Field(default_factory=list)
     needs_playbook_autoprospecting: bool | None = None

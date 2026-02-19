@@ -27,6 +27,7 @@ from .models import (
     Note,
     PaginatedResponse,
     Pipeline,
+    SortOrder,
     Stage,
     Task,
     TaskPriority,
@@ -629,6 +630,8 @@ class ApolloClient:
         page: int = 1,
         limit: int = 100,
         task_type_cds: list[TaskType | str] | None = None,
+        user_ids: list[str] | None = None,
+        sort: list[tuple[str, SortOrder]] | None = None,
         **filters,
     ) -> PaginatedResponse[Task]:
         """Search task activities.
@@ -641,14 +644,21 @@ class ApolloClient:
                 linkedin_step_connect, linkedin_step_message,
                 linkedin_step_interact_post, linkedin_step_view_profile,
                 linkedin_actions, contact_action_item, account_action_item
+            user_ids: Filter by owner user IDs
+            sort: Sort order as list of (field, direction) tuples, e.g.
+                [("task_priority", SortOrder.ASC), ("task_due_at", SortOrder.ASC)]
             **filters: Additional filters
 
         Returns:
             Paginated response with Task items
         """
-        data = {"page": page, "per_page": min(limit, 100), **filters}
+        data: dict[str, Any] = {"page": page, "per_page": min(limit, 100), **filters}
         if task_type_cds is not None:
             data["task_type_cds"] = task_type_cds
+        if user_ids is not None:
+            data["user_ids"] = user_ids
+        if sort is not None:
+            data["multi_sort"] = [{field: {"order": order}} for field, order in sort]
         result = await self._post("/tasks/search", data)
 
         tasks = [Task.model_validate(t) for t in result.get("tasks", [])]
