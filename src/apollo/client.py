@@ -13,8 +13,8 @@ from .exceptions import APIError, AuthenticationError, RateLimitError
 from .models import (
     Account,
     AccountDetail,
-    Call,
     CalendarEvent,
+    Call,
     Contact,
     ContactDetail,
     Deal,
