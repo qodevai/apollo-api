@@ -14,6 +14,9 @@ from .models import (
     CalendarEvent,
     CalendarEventParticipant,
     Call,
+    CallSummary,
+    CallSummaryNextStep,
+    CallSummaryPoint,
     Contact,
     ContactCampaignStatus,
     ContactDetail,
@@ -21,6 +24,10 @@ from .models import (
     ContactJobChangeEvent,
     ContactRole,
     ContactRuleConfigStatus,
+    Conversation,
+    ConversationDeal,
+    ConversationDetail,
+    ConversationParticipant,
     CrmJob,
     CrmNote,
     Currency,
@@ -45,6 +52,8 @@ from .models import (
     Task,
     TaskType,
     Technology,
+    TranscriptSegment,
+    VideoRecording,
 )
 
 __all__ = [
@@ -60,6 +69,9 @@ __all__ = [
     "CalendarEvent",
     "CalendarEventParticipant",
     "Call",
+    "CallSummary",
+    "CallSummaryNextStep",
+    "CallSummaryPoint",
     "Contact",
     "ContactCampaignStatus",
     "ContactDetail",
@@ -67,6 +79,10 @@ __all__ = [
     "ContactJobChangeEvent",
     "ContactRole",
     "ContactRuleConfigStatus",
+    "Conversation",
+    "ConversationDeal",
+    "ConversationDetail",
+    "ConversationParticipant",
     "CrmJob",
     "CrmNote",
     "Currency",
@@ -92,6 +108,8 @@ __all__ = [
     "Task",
     "TaskType",
     "Technology",
+    "TranscriptSegment",
+    "VideoRecording",
 ]
 
 __version__ = "0.1.0"

@@ -17,6 +17,8 @@ from .models import (
     Call,
     Contact,
     ContactDetail,
+    Conversation,
+    ConversationDetail,
     Deal,
     Email,
     Note,
@@ -769,6 +771,48 @@ class ApolloClient:
             total=pagination.get("total_entries", len(events)),
             page=page,
         )
+
+    # ========================================================================
+    # CONVERSATIONS
+    # ========================================================================
+
+    async def search_conversations(
+        self, page: int = 1, limit: int = 100, **filters
+    ) -> PaginatedResponse[Conversation]:
+        """Search recorded conversations (Zoom/Teams/Meet).
+
+        Args:
+            page: Page number (default 1)
+            limit: Results per page (default 100, max 100)
+            **filters: Additional filters
+
+        Returns:
+            Paginated response with Conversation items
+        """
+        data = {"page": page, "per_page": min(limit, 100), **filters}
+        result = await self._post("/conversations/search", data)
+
+        conversations = [Conversation.model_validate(c) for c in result.get("conversations", [])]
+        pagination = result.get("pagination", {})
+
+        return PaginatedResponse[Conversation](
+            items=conversations,
+            total=pagination.get("total_entries", len(conversations)),
+            page=page,
+        )
+
+    async def get_conversation(self, conversation_id: str) -> ConversationDetail:
+        """Get conversation details by ID (includes transcript and summary).
+
+        Args:
+            conversation_id: Conversation ID
+
+        Returns:
+            ConversationDetail model (includes transcript, call_summary, video_recording)
+        """
+        result = await self._get(f"/conversations/{conversation_id}")
+        # Conversations detail API returns data at top level (no wrapping key)
+        return ConversationDetail.model_validate(result)
 
     # ========================================================================
     # NEWS & JOBS

@@ -9,6 +9,9 @@ from apollo.models import (
     AccountQueue,
     ApolloModel,
     Call,
+    CallSummary,
+    CallSummaryNextStep,
+    CallSummaryPoint,
     Contact,
     ContactCampaignStatus,
     ContactDetail,
@@ -16,6 +19,10 @@ from apollo.models import (
     ContactJobChangeEvent,
     ContactRole,
     ContactRuleConfigStatus,
+    Conversation,
+    ConversationDeal,
+    ConversationDetail,
+    ConversationParticipant,
     CrmJob,
     CrmNote,
     Currency,
@@ -37,6 +44,8 @@ from apollo.models import (
     Stage,
     Task,
     Technology,
+    TranscriptSegment,
+    VideoRecording,
 )
 
 # ============================================================================
@@ -794,6 +803,296 @@ def test_contact_detail_with_engagement_graph():
     assert len(detail.engagement_graph) == 2
     assert isinstance(detail.engagement_graph[0], EngagementGraphEntry)
     assert detail.engagement_graph[0].outbound == 5
+
+
+# ============================================================================
+# CONVERSATION MODELS
+# ============================================================================
+
+
+def test_conversation_participant():
+    """Test ConversationParticipant model validation."""
+    participant = ConversationParticipant.model_validate(
+        {
+            "id": "p1",
+            "name": "Jan Scheffler",
+            "email": "jan@example.com",
+            "contact_id": "c1",
+            "user_id": "u1",
+            "is_internal_participant": True,
+            "account_name": "qodev",
+            "title": "Founder",
+        }
+    )
+    assert participant.id == "p1"
+    assert participant.name == "Jan Scheffler"
+    assert participant.is_internal_participant is True
+
+
+def test_transcript_segment():
+    """Test TranscriptSegment model validation."""
+    segment = TranscriptSegment.model_validate(
+        {
+            "id": "seg1",
+            "start_time": 1600.0,
+            "end_time": 1620.0,
+            "spoken_sentence": "Hello, how are you?",
+            "participant_id": "p1",
+            "participant_name": "Jan",
+        }
+    )
+    assert segment.start_time == 1600.0
+    assert segment.spoken_sentence == "Hello, how are you?"
+    assert segment.participant_name == "Jan"
+
+
+def test_video_recording():
+    """Test VideoRecording model validation."""
+    recording = VideoRecording.model_validate(
+        {"type_cd": "video", "url": "https://example.com/rec.mp4", "state_cd": "ready"}
+    )
+    assert recording.type_cd == "video"
+    assert recording.url == "https://example.com/rec.mp4"
+
+
+def test_call_summary_with_structured_items():
+    """Test CallSummary with typed next_steps, pain_points, objections."""
+    summary = CallSummary.model_validate(
+        {
+            "outcome": "Scheduled follow-up demo",
+            "pricing_discussion": "Too expensive",
+            "next_steps": [
+                {
+                    "id": "ns1",
+                    "step": "Schedule demo",
+                    "due_at": "2026-02-24T00:00:00Z",
+                    "action_type": "action_item",
+                    "participant_name": "Jan",
+                },
+            ],
+            "pain_points": [
+                {"id": "pp1", "text": "Catching bugs early", "participant_name": "Client"},
+            ],
+            "objections": [
+                {"id": "obj1", "text": "Pricing too high", "organization_name": "ACME"},
+            ],
+        }
+    )
+    assert summary.outcome == "Scheduled follow-up demo"
+    assert len(summary.next_steps) == 1
+    assert isinstance(summary.next_steps[0], CallSummaryNextStep)
+    assert summary.next_steps[0].step == "Schedule demo"
+    assert summary.next_steps[0].due_at == "2026-02-24T00:00:00Z"
+    assert len(summary.pain_points) == 1
+    assert isinstance(summary.pain_points[0], CallSummaryPoint)
+    assert summary.pain_points[0].text == "Catching bugs early"
+    assert len(summary.objections) == 1
+    assert isinstance(summary.objections[0], CallSummaryPoint)
+    assert summary.objections[0].organization_name == "ACME"
+
+
+def test_call_summary_with_null_lists():
+    """Test CallSummary accepts None for list fields (editable_call_summary case)."""
+    summary = CallSummary.model_validate(
+        {
+            "outcome": "Good call",
+            "next_steps": None,
+            "pain_points": None,
+            "objections": None,
+        }
+    )
+    assert summary.outcome == "Good call"
+    assert summary.next_steps is None
+    assert summary.pain_points is None
+    assert summary.objections is None
+
+
+def test_call_summary_with_empty_lists():
+    """Test CallSummary with empty lists (most conversations)."""
+    summary = CallSummary.model_validate({"next_steps": [], "pain_points": [], "objections": []})
+    assert summary.next_steps == []
+    assert summary.pain_points == []
+    assert summary.objections == []
+
+
+def test_call_summary_defaults():
+    """Test CallSummary with no fields provided."""
+    summary = CallSummary.model_validate({})
+    assert summary.outcome is None
+    assert summary.next_steps is None
+    assert summary.pain_points is None
+
+
+def test_conversation_deal():
+    """Test ConversationDeal model validation."""
+    deal = ConversationDeal.model_validate(
+        {
+            "id": "d1",
+            "name": "ACME / Product",
+            "account_name": "ACME",
+            "opportunity_stage_id": "stage1",
+        }
+    )
+    assert deal.id == "d1"
+    assert deal.name == "ACME / Product"
+    assert deal.account_name == "ACME"
+
+
+def test_conversation_from_search():
+    """Test Conversation model with search endpoint data."""
+    conv = Conversation.model_validate(
+        {
+            "id": "conv1",
+            "start_time": "2026-02-18T14:03:39.421+00:00",
+            "duration": 3439,
+            "host": "Jan",
+            "host_id": "u1",
+            "state": "insights_generated",
+            "conversation_type": "video_conference",
+            "topic": "Product Demo",
+            "comment_count": 2,
+            "is_private": False,
+            "participant_names": ["Jan", "Client"],
+            "account_names": ["ACME"],
+            "account_ids": ["acc1"],
+            "participants_info": [
+                {
+                    "id": "p1",
+                    "name": "Jan",
+                    "email": "jan@example.com",
+                    "is_internal_participant": True,
+                },
+                {
+                    "id": "p2",
+                    "name": "Client",
+                    "email": "client@acme.com",
+                    "is_internal_participant": False,
+                },
+            ],
+            "deals": [
+                {
+                    "id": "d1",
+                    "name": "ACME Deal",
+                    "account_name": "ACME",
+                    "opportunity_stage_id": "s1",
+                },
+            ],
+        }
+    )
+    assert conv.id == "conv1"
+    assert conv.duration == 3439
+    assert conv.topic == "Product Demo"
+    assert isinstance(conv.start_time, datetime)
+    assert len(conv.participants_info) == 2
+    assert isinstance(conv.participants_info[0], ConversationParticipant)
+    assert conv.participants_info[1].name == "Client"
+    assert len(conv.deals) == 1
+    assert isinstance(conv.deals[0], ConversationDeal)
+    assert conv.deals[0].name == "ACME Deal"
+
+
+def test_conversation_minimal():
+    """Test Conversation with only required fields."""
+    conv = Conversation.model_validate({"id": "conv1"})
+    assert conv.id == "conv1"
+    assert conv.topic is None
+    assert conv.participants_info == []
+    assert conv.deals == []
+
+
+def test_conversation_detail():
+    """Test ConversationDetail inherits Conversation and adds detail fields."""
+    detail = ConversationDetail.model_validate(
+        {
+            "id": "conv1",
+            "topic": "Demo Call",
+            "duration": 1800,
+            "transcript": [
+                {
+                    "id": "seg1",
+                    "start_time": 0.0,
+                    "end_time": 5.0,
+                    "spoken_sentence": "Hello everyone",
+                    "participant_id": "p1",
+                    "participant_name": "Jan",
+                },
+                {
+                    "id": "seg2",
+                    "start_time": 5.0,
+                    "end_time": 10.0,
+                    "spoken_sentence": "Thanks for joining",
+                    "participant_id": "p2",
+                    "participant_name": "Client",
+                },
+            ],
+            "video_recording": {
+                "type_cd": "video",
+                "url": "https://example.com/rec.mp4",
+                "state_cd": "ready",
+            },
+            "call_summary": {
+                "outcome": "Positive demo",
+                "next_steps": [{"id": "ns1", "step": "Send proposal", "participant_name": "Jan"}],
+                "pain_points": [
+                    {"id": "pp1", "text": "Manual process", "participant_name": "Client"}
+                ],
+                "objections": [],
+            },
+            "key_topics": {"tracker_insights": {"trackers_available": True, "trackers": []}},
+            "pushed_to_crm": False,
+            "is_clip": False,
+            "opportunity_ids": ["opp1", "opp2"],
+        }
+    )
+    # Inherited fields
+    assert detail.id == "conv1"
+    assert detail.topic == "Demo Call"
+    assert detail.duration == 1800
+
+    # Detail-specific fields
+    assert len(detail.transcript) == 2
+    assert isinstance(detail.transcript[0], TranscriptSegment)
+    assert detail.transcript[0].spoken_sentence == "Hello everyone"
+
+    assert isinstance(detail.video_recording, VideoRecording)
+    assert detail.video_recording.type_cd == "video"
+
+    assert isinstance(detail.call_summary, CallSummary)
+    assert detail.call_summary.outcome == "Positive demo"
+    assert len(detail.call_summary.next_steps) == 1
+    assert detail.call_summary.next_steps[0].step == "Send proposal"
+
+    assert detail.key_topics == {"tracker_insights": {"trackers_available": True, "trackers": []}}
+    assert detail.pushed_to_crm is False
+    assert detail.opportunity_ids == ["opp1", "opp2"]
+
+
+def test_conversation_detail_minimal():
+    """Test ConversationDetail with only required fields."""
+    detail = ConversationDetail.model_validate({"id": "conv1"})
+    assert detail.transcript == []
+    assert detail.video_recording is None
+    assert detail.call_summary is None
+    assert detail.key_topics == {}
+    assert detail.opportunity_ids == []
+
+
+def test_conversation_detail_with_editable_summary_null_fields():
+    """Test ConversationDetail where editable_call_summary has null list fields."""
+    detail = ConversationDetail.model_validate(
+        {
+            "id": "conv1",
+            "editable_call_summary": {
+                "outcome": "Good call",
+                "pain_points": None,
+                "objections": None,
+            },
+        }
+    )
+    assert detail.editable_call_summary is not None
+    assert detail.editable_call_summary.outcome == "Good call"
+    assert detail.editable_call_summary.pain_points is None
+    assert detail.editable_call_summary.objections is None
 
 
 # ============================================================================

@@ -935,6 +935,120 @@ class CalendarEvent(ApolloModel):
     participants_str: str | None = None
 
 
+class ConversationParticipant(ApolloModel):
+    """Participant in a recorded conversation."""
+
+    id: str
+    name: str | None = None
+    contact_id: str | None = None
+    user_id: str | None = None
+    email: str | None = None
+    is_internal_participant: bool | None = None
+    account_name: str | None = None
+    title: str | None = None
+
+
+class TranscriptSegment(ApolloModel):
+    """Single spoken segment within a conversation transcript."""
+
+    id: str | None = None
+    start_time: float | None = None  # seconds within recording
+    end_time: float | None = None
+    spoken_sentence: str | None = None
+    participant_id: str | None = None
+    participant_name: str | None = None
+
+
+class VideoRecording(ApolloModel):
+    """Video recording metadata for a conversation."""
+
+    type_cd: str | None = None
+    url: str | None = None
+    state_cd: str | None = None
+
+
+class CallSummaryNextStep(ApolloModel):
+    """A next step from an AI-generated call summary."""
+
+    id: str | None = None
+    step: str | None = None
+    due_at: str | None = None
+    action_type: str | None = None
+    task_id: str | None = None
+    participant_id: str | None = None
+    participant_name: str | None = None
+    organization_name: str | None = None
+
+
+class CallSummaryPoint(ApolloModel):
+    """A pain point or objection from an AI-generated call summary."""
+
+    id: str | None = None
+    text: str | None = None
+    participant_id: str | None = None
+    participant_name: str | None = None
+    organization_name: str | None = None
+
+
+class CallSummary(ApolloModel):
+    """AI-generated summary of a conversation."""
+
+    outcome: str | None = None
+    pricing_discussion: str | None = None
+    next_steps: list[CallSummaryNextStep] | None = None
+    pain_points: list[CallSummaryPoint] | None = None
+    objections: list[CallSummaryPoint] | None = None
+
+
+class ConversationDeal(ApolloModel):
+    """Deal associated with a conversation."""
+
+    id: str
+    name: str | None = None
+    account_name: str | None = None
+    opportunity_stage_id: str | None = None
+
+
+class Conversation(ApolloModel):
+    """Conversation from search endpoint."""
+
+    id: str
+    start_time: datetime | None = None
+    duration: int | None = None
+    host: str | None = None
+    host_id: str | None = None
+    state: str | None = None
+    failure_code: str | None = None
+    bot_call_ended_reason: str | None = None
+    conversation_type: str | None = None
+    topic: str | None = None
+    comment_count: int | None = None
+    is_internal: bool | None = None
+    is_private: bool | None = None
+    can_access_conversation: bool | None = None
+    thumbnail_url: str | None = None
+    team_id: str | None = None
+    participant_names: list[str] = Field(default_factory=list)
+    account_names: list[str] = Field(default_factory=list)
+    account_ids: list[str] = Field(default_factory=list)
+    participants_info: list[ConversationParticipant] = Field(default_factory=list)
+    deals: list[ConversationDeal] = Field(default_factory=list)
+
+
+class ConversationDetail(Conversation):
+    """Extended conversation from detail endpoint — adds transcript, summary, recording."""
+
+    transcript: list[TranscriptSegment] = Field(default_factory=list)
+    video_recording: VideoRecording | None = None
+    call_summary: CallSummary | None = None
+    editable_call_summary: CallSummary | None = None
+    key_topics: dict[str, Any] = Field(default_factory=dict)
+    pushed_to_crm: bool | None = None
+    is_shared_conversation: bool | None = None
+    is_clip: bool | None = None
+    opportunity_ids: list[str] = Field(default_factory=list)
+
+
 class NewsArticle(BaseModel):
     """News article model."""
 
