@@ -4,6 +4,7 @@ Type-safe async wrapper for Apollo.io API.
 """
 
 import os
+from datetime import datetime
 from types import TracebackType
 from typing import Any
 
@@ -21,11 +22,15 @@ from .models import (
     ConversationDetail,
     Deal,
     Email,
+    EmailerMessage,
+    EmailTask,
     Note,
     PaginatedResponse,
     Pipeline,
     Stage,
     Task,
+    TaskPriority,
+    TaskStatus,
     TaskType,
 )
 from .utils import normalize_linkedin_url, prosemirror_to_markdown
@@ -151,6 +156,10 @@ class ApolloClient:
         """Make GET request."""
         return await self._request("GET", endpoint)
 
+    async def _put(self, endpoint: str, data: dict) -> dict:
+        """Make PUT request."""
+        return await self._request("PUT", endpoint, json=data)
+
     # ========================================================================
     # CONTACTS
     # ========================================================================
@@ -197,7 +206,7 @@ class ApolloClient:
         first_name: str,
         last_name: str,
         **fields,
-    ) -> dict:
+    ) -> Contact:
         """Create a new contact.
 
         Args:
@@ -206,14 +215,15 @@ class ApolloClient:
             **fields: Additional fields (email, title, company_name, linkedin_url, etc.)
 
         Returns:
-            Raw API response with created contact data
+            Created Contact model
         """
         data = {
             "first_name": first_name,
             "last_name": last_name,
             **fields,
         }
-        return await self._post("/contacts", data)
+        result = await self._post("/contacts", data)
+        return Contact.model_validate(result.get("contact", result))
 
     async def update_contact(self, contact_id: str, **fields) -> Contact:
         """Update a contact's fields.
@@ -225,7 +235,7 @@ class ApolloClient:
         Returns:
             Updated Contact model
         """
-        result = await self._request("PUT", f"/contacts/{contact_id}", json=fields)
+        result = await self._put(f"/contacts/{contact_id}", fields)
         return Contact.model_validate(result.get("contact", {}))
 
     async def get_contact_stages(self) -> list[dict]:
@@ -313,7 +323,7 @@ class ApolloClient:
                         create_data["contact_stage_id"] = contact_stage_id
 
                     created = await self.create_contact(**create_data)
-                    return created.get("contact", {}).get("id")
+                    return created.id
 
         return None
 
@@ -679,22 +689,24 @@ class ApolloClient:
         self,
         contact_ids: list[str],
         note: str,
-        type: str = "action_item",
-        priority: str = "medium",
+        type: TaskType | str = TaskType.CONTACT_ACTION_ITEM,
+        priority: TaskPriority | str = TaskPriority.MEDIUM,
         **fields,
-    ) -> dict:
+    ) -> Task:
         """Create a task.
 
         Args:
             contact_ids: List of contact IDs
             note: Task description
-            type: Task type (action_item, call, etc.)
-            priority: Task priority (high, medium, low)
-            **fields: Additional fields (due_at, etc.)
+            type: Task type
+            priority: Task priority
+            **fields: Additional fields (due_at, status, etc.)
 
         Returns:
-            Raw API response with created task data
+            Created Task model
         """
+        if not contact_ids:
+            raise ValueError("contact_ids must not be empty")
         data = {
             "contact_ids": contact_ids,
             "note": note,
@@ -702,9 +714,10 @@ class ApolloClient:
             "priority": priority,
             **fields,
         }
-        return await self._post("/tasks", data)
+        result = await self._post("/tasks", data)
+        return Task.model_validate(result.get("task", result))
 
-    async def complete_task(self, task_id: str, note: str | None = None) -> dict:
+    async def complete_task(self, task_id: str, note: str | None = None) -> Task:
         """Mark a task as completed.
 
         Args:
@@ -712,36 +725,187 @@ class ApolloClient:
             note: Optional note/message to attach on completion
 
         Returns:
-            Raw API response
+            Completed Task model
         """
         data: dict[str, Any] = {}
         if note is not None:
             data["note"] = note
-        return await self._post(f"/tasks/{task_id}/complete", data)
+        result = await self._post(f"/tasks/{task_id}/complete", data)
+        return Task.model_validate(result.get("task", result))
 
-    async def list_contact_calls(self, contact_id: str) -> list[dict]:
+    async def get_task(self, task_id: str) -> Task:
+        """Get task details by ID.
+
+        Args:
+            task_id: Task ID
+
+        Returns:
+            Task model
+        """
+        result = await self._get(f"/tasks/{task_id}")
+        return Task.model_validate(result.get("task", {}))
+
+    async def create_email_task(
+        self,
+        contact_ids: list[str],
+        note: str,
+        user_id: str | None = None,
+        priority: TaskPriority | str = TaskPriority.MEDIUM,
+        due_at: datetime | None = None,
+        **fields,
+    ) -> EmailTask:
+        """Create an email task (Manual E-Mail type).
+
+        Creates a task of type 'outreach_manual_email' associated with contacts.
+        The task is created with status='scheduled' which triggers Apollo to
+        auto-create an emailer_message companion object. Use
+        update_emailer_message() to set the email subject and body afterwards.
+
+        After setting the email content with update_emailer_message(), call
+        send_email_task() to send the email immediately.
+
+        Args:
+            contact_ids: List of contact IDs to associate
+            note: Task title/description
+            user_id: User ID to assign the task to (optional)
+            priority: Task priority (default: medium)
+            due_at: When the task is due (optional).
+                Pass at creation time so it propagates to the emailer_message.
+            **fields: Additional task fields
+
+        Returns:
+            Created EmailTask model (includes emailer_message)
+        """
+        extra: dict[str, Any] = {**fields}
+        if user_id is not None:
+            extra["user_id"] = user_id
+        if due_at is not None:
+            extra["due_at"] = due_at.isoformat()
+        data = {
+            "contact_ids": contact_ids,
+            "note": note,
+            "type": TaskType.OUTREACH_MANUAL_EMAIL,
+            "priority": priority,
+            "status": TaskStatus.SCHEDULED,
+            **extra,
+        }
+        result = await self._post("/tasks", data)
+        return EmailTask.model_validate(result.get("task", result))
+
+    async def skip_tasks(self, task_ids: list[str]) -> dict:
+        """Skip (archive) one or more tasks.
+
+        Args:
+            task_ids: List of task IDs to skip
+
+        Returns:
+            Raw API response
+        """
+        data = {
+            "ids": task_ids,
+            "on_task_page": True,
+            "async": False,
+        }
+        return await self._post("/tasks/bulk_skip", data)
+
+    async def update_task(self, task_id: str, **fields) -> Task:
+        """Update a task's fields.
+
+        Updates task-level properties like priority, due_at, or note.
+        To modify the email subject/body on email tasks, use
+        update_emailer_message() instead.
+
+        Args:
+            task_id: Task ID to update
+            **fields: Fields to update (priority, due_at, note, etc.)
+
+        Returns:
+            Updated Task model
+        """
+        if not fields:
+            raise ValueError("At least one field must be provided")
+        result = await self._put(f"/tasks/{task_id}", fields)
+        return Task.model_validate(result.get("task", {}))
+
+    async def update_emailer_message(
+        self,
+        message_id: str,
+        subject: str | None = None,
+        body_html: str | None = None,
+        **fields,
+    ) -> EmailerMessage:
+        """Update an emailer message's subject and body.
+
+        Email tasks have a companion emailer_message object that holds the
+        email content. Use this method to set the subject and body after
+        creating an email task with create_email_task().
+
+        The message_id can be found in the task's emailer_message.id field.
+
+        Args:
+            message_id: Emailer message ID (from task.emailer_message.id)
+            subject: Email subject line (optional)
+            body_html: Email body as HTML (optional). Note: body_text is
+                auto-derived from body_html by the API.
+            **fields: Additional fields (cc_emails, bcc_emails, etc.)
+
+        Returns:
+            Updated EmailerMessage model
+        """
+        data: dict[str, Any] = {**fields}
+        if subject is not None:
+            data["subject"] = subject
+        if body_html is not None:
+            data["body_html"] = body_html
+        if not data:
+            raise ValueError("At least one field must be provided")
+        result = await self._put(f"/emailer_messages/{message_id}", data)
+        return EmailerMessage.model_validate(result.get("emailer_message", result))
+
+    async def send_email_task(
+        self,
+        emailer_message_id: str,
+    ) -> EmailerMessage:
+        """Send an email task immediately.
+
+        Transitions the emailer_message from 'drafted' to 'scheduled' for
+        immediate async sending, and marks the parent task as completed.
+
+        Args:
+            emailer_message_id: Emailer message ID (from task.emailer_message.id)
+
+        Returns:
+            Sent EmailerMessage model
+        """
+        result = await self._post(
+            f"/emailer_messages/{emailer_message_id}/send_now",
+            {"surface": "tasks"},
+        )
+        return EmailerMessage.model_validate(result.get("emailer_message", result))
+
+    async def list_contact_calls(self, contact_id: str) -> list[Call]:
         """List calls for a contact.
 
         Args:
             contact_id: Contact ID
 
         Returns:
-            List of call dictionaries
+            List of Call models
         """
         result = await self._get(f"/contacts/{contact_id}/calls")
-        return result.get("calls", [])
+        return [Call.model_validate(c) for c in result.get("calls", [])]
 
-    async def list_contact_tasks(self, contact_id: str) -> list[dict]:
+    async def list_contact_tasks(self, contact_id: str) -> list[Task]:
         """List tasks for a contact.
 
         Args:
             contact_id: Contact ID
 
         Returns:
-            List of task dictionaries
+            List of Task models
         """
         result = await self._get(f"/contacts/{contact_id}/tasks")
-        return result.get("tasks", [])
+        return [Task.model_validate(t) for t in result.get("tasks", [])]
 
     # ========================================================================
     # CALENDAR EVENTS

@@ -30,10 +30,12 @@ from apollo.models import (
     Email,
     EmailerMessage,
     EmailParticipant,
+    EmailTask,
     EmploymentHistory,
     EngagementData,
     EngagementGraphEntry,
     EngagementTypeCount,
+    LinkedInMessageTask,
     Note,
     OpportunityContactRole,
     OpportunityRoleEntry,
@@ -677,8 +679,8 @@ def test_task_model():
 
 
 def test_task_with_engagement_data():
-    """Test Task deserializes engagement_data with typed types_count."""
-    task = Task.model_validate(
+    """Test LinkedInMessageTask deserializes engagement_data with typed types_count."""
+    task = LinkedInMessageTask.model_validate(
         {
             "id": "t1",
             "engagement_data": {
@@ -700,8 +702,8 @@ def test_task_with_engagement_data():
 
 
 def test_task_with_emailer_message():
-    """Test Task deserializes emailer_message into EmailerMessage model."""
-    task = Task.model_validate(
+    """Test EmailTask deserializes emailer_message into EmailerMessage model."""
+    task = EmailTask.model_validate(
         {
             "id": "t1",
             "emailer_message": {
@@ -720,7 +722,7 @@ def test_task_with_emailer_message():
 
 def test_task_emailer_message_without_id():
     """Test EmailerMessage accepts missing id (drafts may lack one)."""
-    task = Task.model_validate(
+    task = EmailTask.model_validate(
         {
             "id": "t1",
             "emailer_message": {
@@ -732,6 +734,54 @@ def test_task_emailer_message_without_id():
     assert isinstance(task.emailer_message, EmailerMessage)
     assert task.emailer_message.id is None
     assert task.emailer_message.subject == "Draft"
+
+
+def test_task_email_type_enum():
+    """Test TaskType.OUTREACH_MANUAL_EMAIL has correct value."""
+    from apollo.models import TaskType
+
+    assert TaskType.OUTREACH_MANUAL_EMAIL == "outreach_manual_email"
+    assert TaskType.OUTREACH_MANUAL_EMAIL.value == "outreach_manual_email"
+
+
+def test_task_with_full_emailer_message():
+    """Test EmailTask with complete emailer_message including scheduling fields."""
+    task = EmailTask.model_validate(
+        {
+            "id": "t1",
+            "type": "outreach_manual_email",
+            "emailer_message": {
+                "id": "em1",
+                "subject": "Follow up on our conversation",
+                "body_text": "<p>Hello, just following up.</p>",
+                "status": "drafted",
+                "to_email": "recipient@example.com",
+                "from_email": "sender@example.com",
+                "due_at": "2026-02-19T10:00:00.000Z",
+            },
+        }
+    )
+    assert task.type == "outreach_manual_email"
+    assert task.emailer_message is not None
+    assert task.emailer_message.body_text == "<p>Hello, just following up.</p>"
+    assert task.emailer_message.due_at is not None
+
+
+def test_emailer_message_inherits_email_fields():
+    """Test EmailerMessage has all Email fields available."""
+    msg = EmailerMessage.model_validate(
+        {
+            "subject": "Test",
+            "body_text": "Body",
+            "status": "drafted",
+            "cc_emails": ["cc@example.com"],
+            "enable_tracking": True,
+        }
+    )
+    assert msg.id is None
+    assert msg.subject == "Test"
+    assert msg.cc_emails == ["cc@example.com"]
+    assert msg.enable_tracking is True
 
 
 # ============================================================================

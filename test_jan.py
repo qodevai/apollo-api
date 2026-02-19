@@ -1,6 +1,7 @@
 """Test script to fetch information about Jan Scheffler."""
 
 import asyncio
+
 from apollo import ApolloClient
 
 
@@ -36,28 +37,34 @@ async def main():
                 print(f"  Phone Numbers: {contact.phone_numbers}")
 
             # Try to get full contact details
-            print(f"\nFetching full contact details...")
+            print("\nFetching full contact details...")
             full_contact = await client.get_contact(contact.id)
             print(f"  City: {full_contact.city}")
             print(f"  Account ID: {full_contact.account_id}")
             print(f"  Created: {full_contact.created_at}")
 
             # Check rate limits
-            print(f"\nRate Limit Status:")
+            print("\nRate Limit Status:")
             rate_limits = client.rate_limit_status
-            print(f"  Hourly: {rate_limits.get('hourly_left', 0)}/{rate_limits.get('hourly_limit', 0)}")
-            print(f"  Minute: {rate_limits.get('minute_left', 0)}/{rate_limits.get('minute_limit', 0)}")
-            print(f"  Daily: {rate_limits.get('daily_left', 0)}/{rate_limits.get('daily_limit', 0)}")
+            print(
+                f"  Hourly: {rate_limits.get('hourly_left', 0)}/{rate_limits.get('hourly_limit', 0)}"
+            )
+            print(
+                f"  Minute: {rate_limits.get('minute_left', 0)}/{rate_limits.get('minute_limit', 0)}"
+            )
+            print(
+                f"  Daily: {rate_limits.get('daily_left', 0)}/{rate_limits.get('daily_limit', 0)}"
+            )
 
         else:
             print("No contact found with that email in Apollo")
 
         # Try enrichment
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("Testing person enrichment...")
         try:
             person = await client.enrich_person("jan.scheffler@qodev.ai")
-            print(f"✓ Enrichment successful")
+            print("✓ Enrichment successful")
             print(f"  Name: {person.get('first_name')} {person.get('last_name')}")
             print(f"  Title: {person.get('title')}")
             print(f"  Company: {person.get('organization', {}).get('name')}")

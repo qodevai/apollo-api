@@ -738,6 +738,22 @@ class Call(ApolloModel):
     updated_at: datetime | None = None
 
 
+class TaskPriority(StrEnum):
+    """Task priority levels."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class TaskStatus(StrEnum):
+    """Task status values."""
+
+    SCHEDULED = "scheduled"
+    COMPLETE = "complete"
+    OVERDUE = "overdue"
+
+
 class TaskType(StrEnum):
     """Task type codes used by the Apollo API."""
 
@@ -754,8 +770,23 @@ class TaskType(StrEnum):
     ACCOUNT_ACTION_ITEM = "account_action_item"
 
 
+class LinkedInTemplate(ApolloModel):
+    """LinkedIn message template embedded in campaign-based connect tasks."""
+
+    id: str
+    body_text: str | None = None
+
+
+class OutreachTaskMessage(ApolloModel):
+    """Standalone outreach message for LinkedIn tasks."""
+
+    id: str | None = None
+    body_text: str | None = None
+    subject: str | None = None
+
+
 class Task(ApolloModel):
-    """Task activity model."""
+    """Base task activity model with fields common to all task types."""
 
     id: str
 
@@ -763,7 +794,6 @@ class Task(ApolloModel):
     contact_id: str | None = None
     account_id: str | None = None
     user_id: str | None = None
-    opportunity_id: str | None = None
     organization_id: str | None = None
     person_id: str | None = None
     contact: Contact | None = None
@@ -779,10 +809,7 @@ class Task(ApolloModel):
     note: str | None = None
     answered: bool | None = None
 
-    # Campaign & Automation
-    emailer_campaign_id: str | None = None
-    emailer_message: EmailerMessage | None = None
-    engagement_data: EngagementData | None = None
+    # Automation
     playbook_id: str | None = None
     playbook_step_ids: list[str] = Field(default_factory=list)
     needs_playbook_autoprospecting: bool | None = None
@@ -806,6 +833,31 @@ class Task(ApolloModel):
 
     # Timestamps
     created_at: datetime | None = None
+
+
+class EmailTask(Task):
+    """Email task (outreach_manual_email) with emailer_message companion."""
+
+    emailer_message: EmailerMessage | None = None
+    engagement_data: EngagementData | None = None
+
+
+class LinkedInConnectTask(Task):
+    """LinkedIn connection request task (linkedin_step_connect)."""
+
+    emailer_campaign_id: str | None = None
+    linkedin_emailer_template: LinkedInTemplate | None = None
+    standalone_outreach_task_message: OutreachTaskMessage | None = None
+    campaign_name: str | None = None
+    campaign_position: int | None = None
+
+
+class LinkedInMessageTask(Task):
+    """LinkedIn message task (linkedin_step_message) for existing connections."""
+
+    opportunity_id: str | None = None
+    standalone_outreach_task_message: OutreachTaskMessage | None = None
+    engagement_data: EngagementData | None = None
 
 
 class Email(ApolloModel):
