@@ -24,6 +24,8 @@ from .models import (
     Email,
     EmailerMessage,
     EmailTask,
+    LinkedInConnectTask,
+    LinkedInMessageTask,
     Note,
     PaginatedResponse,
     Pipeline,
@@ -801,6 +803,110 @@ class ApolloClient:
         }
         result = await self._post("/tasks", data)
         return EmailTask.model_validate(result.get("task", result))
+
+    async def create_linkedin_connect_task(
+        self,
+        contact_id: str,
+        title: str,
+        message: str,
+        note: str = "",
+        user_id: str | None = None,
+        priority: TaskPriority | str = TaskPriority.MEDIUM,
+        due_at: datetime | None = None,
+        **fields,
+    ) -> LinkedInConnectTask:
+        """Create a LinkedIn connection request task with a message.
+
+        Creates a task of type 'linkedin_step_connect' that sends a
+        connection request with a personalized message via Apollo.
+
+        Args:
+            contact_id: Contact ID to send the connection request to
+            title: Task title (e.g. "Connect Alexis Kartmann")
+            message: The connection request message the recipient sees
+            note: Internal task description (default: empty)
+            user_id: User ID to assign the task to (optional)
+            priority: Task priority (default: medium)
+            due_at: When the task is due
+                (optional, defaults to now)
+            **fields: Additional task fields
+
+        Returns:
+            Created LinkedInConnectTask model
+        """
+        extra: dict[str, Any] = {**fields}
+        if user_id is not None:
+            extra["user_id"] = user_id
+        if due_at is not None:
+            extra["due_at"] = due_at.isoformat()
+        extra["title"] = title
+        extra["contact_id"] = contact_id
+        extra["standalone_outreach_task_message"] = {
+            "body_text": message,
+            "subject": "",
+        }
+        data = {
+            "contact_ids": [contact_id],
+            "note": note,
+            "type": TaskType.LINKEDIN_STEP_CONNECT,
+            "priority": priority,
+            "status": TaskStatus.SCHEDULED,
+            **extra,
+        }
+        result = await self._post("/tasks", data)
+        return LinkedInConnectTask.model_validate(result.get("task", result))
+
+    async def create_linkedin_message_task(
+        self,
+        contact_id: str,
+        title: str,
+        message: str,
+        note: str = "",
+        user_id: str | None = None,
+        priority: TaskPriority | str = TaskPriority.MEDIUM,
+        due_at: datetime | None = None,
+        **fields,
+    ) -> LinkedInMessageTask:
+        """Create a LinkedIn message task.
+
+        Creates a task of type 'linkedin_step_message' that sends a
+        LinkedIn message to an existing connection via Apollo.
+
+        Args:
+            contact_id: Contact ID to send the message to
+            title: Task title
+            message: The LinkedIn message body the recipient sees
+            note: Internal task description (default: empty)
+            user_id: User ID to assign the task to (optional)
+            priority: Task priority (default: medium)
+            due_at: When the task is due
+                (optional)
+            **fields: Additional task fields
+
+        Returns:
+            Created LinkedInMessageTask model
+        """
+        extra: dict[str, Any] = {**fields}
+        if user_id is not None:
+            extra["user_id"] = user_id
+        if due_at is not None:
+            extra["due_at"] = due_at.isoformat()
+        extra["title"] = title
+        extra["contact_id"] = contact_id
+        extra["standalone_outreach_task_message"] = {
+            "body_text": message,
+            "subject": "",
+        }
+        data = {
+            "contact_ids": [contact_id],
+            "note": note,
+            "type": TaskType.LINKEDIN_STEP_MESSAGE,
+            "priority": priority,
+            "status": TaskStatus.SCHEDULED,
+            **extra,
+        }
+        result = await self._post("/tasks", data)
+        return LinkedInMessageTask.model_validate(result.get("task", result))
 
     async def skip_tasks(self, task_ids: list[str]) -> dict:
         """Skip (archive) one or more tasks.
