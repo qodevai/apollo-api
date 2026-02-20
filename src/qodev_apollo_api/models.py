@@ -845,6 +845,7 @@ class Task(ApolloModel):
 
 class EmailTask(Task):
     """Email task (outreach_manual_email) with emailer_message companion."""
+
     type: Literal[TaskType.OUTREACH_MANUAL_EMAIL] = TaskType.OUTREACH_MANUAL_EMAIL
     emailer_message: EmailerMessage | None = None
     engagement_data: EngagementData | None = None
@@ -852,7 +853,7 @@ class EmailTask(Task):
 
 class LinkedInConnectTask(Task):
     """LinkedIn connection request task (linkedin_step_connect)."""
-    
+
     type: Literal[TaskType.LINKEDIN_STEP_CONNECT] = TaskType.LINKEDIN_STEP_CONNECT
     emailer_campaign_id: str | None = None
     linkedin_emailer_template: LinkedInTemplate | None = None
@@ -872,6 +873,7 @@ class LinkedInMessageTask(Task):
 # ---------------------------------------------------------------------------
 # Discriminated union for polymorphic task deserialization
 # ---------------------------------------------------------------------------
+
 
 def _task_discriminator(v: Any) -> str:
     raw_type = v.get("type") if isinstance(v, dict) else getattr(v, "type", None)
