@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated, Any, Generic, TypeVar
+from typing import Annotated, Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, TypeAdapter
 
@@ -809,9 +809,9 @@ class Task(ApolloModel):
     # Task details
     title: str | None = None
     subject: str | None = None
-    type: str | None = None
-    priority: str | None = None
-    status: str | None = None
+    type: TaskType | None = None
+    priority: TaskPriority | None = None
+    status: TaskStatus | None = None
     due_at: datetime | None = None
     note: str | None = None
     answered: bool | None = None
@@ -845,14 +845,15 @@ class Task(ApolloModel):
 
 class EmailTask(Task):
     """Email task (outreach_manual_email) with emailer_message companion."""
-
+    type: Literal[TaskType.OUTREACH_MANUAL_EMAIL] = TaskType.OUTREACH_MANUAL_EMAIL
     emailer_message: EmailerMessage | None = None
     engagement_data: EngagementData | None = None
 
 
 class LinkedInConnectTask(Task):
     """LinkedIn connection request task (linkedin_step_connect)."""
-
+    
+    type: Literal[TaskType.LINKEDIN_STEP_CONNECT] = TaskType.LINKEDIN_STEP_CONNECT
     emailer_campaign_id: str | None = None
     linkedin_emailer_template: LinkedInTemplate | None = None
     standalone_outreach_task_message: OutreachTaskMessage | None = None
@@ -863,7 +864,7 @@ class LinkedInConnectTask(Task):
 class LinkedInMessageTask(Task):
     """LinkedIn message task (linkedin_step_message) for existing connections."""
 
-    opportunity_id: str | None = None
+    type: Literal[TaskType.LINKEDIN_STEP_MESSAGE] = TaskType.LINKEDIN_STEP_MESSAGE
     standalone_outreach_task_message: OutreachTaskMessage | None = None
     engagement_data: EngagementData | None = None
 
@@ -874,17 +875,15 @@ class LinkedInMessageTask(Task):
 
 def _task_discriminator(v: Any) -> str:
     raw_type = v.get("type") if isinstance(v, dict) else getattr(v, "type", None)
-    return {
-        "outreach_manual_email": "email",
-        "linkedin_step_connect": "linkedin_connect",
-        "linkedin_step_message": "linkedin_message",
-    }.get(raw_type, "base")
+    if isinstance(raw_type, TaskType):
+        return raw_type.value
+    return raw_type or "base"
 
 
 AnyTask = Annotated[
-    Annotated[EmailTask, Tag("email")]
-    | Annotated[LinkedInConnectTask, Tag("linkedin_connect")]
-    | Annotated[LinkedInMessageTask, Tag("linkedin_message")]
+    Annotated[EmailTask, Tag(TaskType.OUTREACH_MANUAL_EMAIL)]
+    | Annotated[LinkedInConnectTask, Tag(TaskType.LINKEDIN_STEP_CONNECT)]
+    | Annotated[LinkedInMessageTask, Tag(TaskType.LINKEDIN_STEP_MESSAGE)]
     | Annotated[Task, Tag("base")],
     Discriminator(_task_discriminator),
 ]

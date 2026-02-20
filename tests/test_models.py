@@ -45,6 +45,7 @@ from qodev_apollo_api.models import (
     Pipeline,
     Stage,
     Task,
+    TaskType,
     Technology,
     TranscriptSegment,
     VideoRecording,
@@ -669,13 +670,13 @@ def test_task_model():
     task = Task(
         id="task_123",
         contact_id="contact_1",
-        type="action_item",
+        type="contact_action_item",
         priority="high",
         status="scheduled",
     )
     assert task.id == "task_123"
     assert task.contact_id == "contact_1"
-    assert task.type == "action_item"
+    assert task.type == TaskType.CONTACT_ACTION_ITEM
 
 
 def test_task_with_engagement_data():
