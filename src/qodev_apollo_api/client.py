@@ -14,6 +14,7 @@ from .exceptions import APIError, AuthenticationError, RateLimitError
 from .models import (
     Account,
     AccountDetail,
+    AnyTask,
     CalendarEvent,
     Call,
     Contact,
@@ -35,6 +36,7 @@ from .models import (
     TaskPriority,
     TaskStatus,
     TaskType,
+    resolve_task,
 )
 from .utils import normalize_linkedin_url, prosemirror_to_markdown
 
@@ -635,7 +637,7 @@ class ApolloClient:
         user_ids: list[str] | None = None,
         sort: list[tuple[str, SortOrder]] | None = None,
         **filters,
-    ) -> PaginatedResponse[Task]:
+    ) -> PaginatedResponse[AnyTask]:
         """Search task activities.
 
         Args:
@@ -663,10 +665,10 @@ class ApolloClient:
             data["multi_sort"] = [{field: {"order": order}} for field, order in sort]
         result = await self._post("/tasks/search", data)
 
-        tasks = [Task.model_validate(t) for t in result.get("tasks", [])]
+        tasks = [resolve_task(t) for t in result.get("tasks", [])]
         pagination = result.get("pagination", {})
 
-        return PaginatedResponse[Task](
+        return PaginatedResponse[AnyTask](
             items=tasks,
             total=pagination.get("total_entries", len(tasks)),
             page=page,
@@ -729,7 +731,7 @@ class ApolloClient:
         result = await self._post("/tasks", data)
         return Task.model_validate(result.get("task", result))
 
-    async def complete_task(self, task_id: str, note: str | None = None) -> Task:
+    async def complete_task(self, task_id: str, note: str | None = None) -> AnyTask:
         """Mark a task as completed.
 
         Args:
@@ -743,9 +745,9 @@ class ApolloClient:
         if note is not None:
             data["note"] = note
         result = await self._post(f"/tasks/{task_id}/complete", data)
-        return Task.model_validate(result.get("task", result))
+        return resolve_task(result.get("task", result))
 
-    async def get_task(self, task_id: str) -> Task:
+    async def get_task(self, task_id: str) -> AnyTask:
         """Get task details by ID.
 
         Args:
@@ -755,7 +757,7 @@ class ApolloClient:
             Task model
         """
         result = await self._get(f"/tasks/{task_id}")
-        return Task.model_validate(result.get("task", {}))
+        return resolve_task(result.get("task", {}))
 
     async def create_email_task(
         self,
@@ -924,7 +926,7 @@ class ApolloClient:
         }
         return await self._post("/tasks/bulk_skip", data)
 
-    async def update_task(self, task_id: str, **fields) -> Task:
+    async def update_task(self, task_id: str, **fields) -> AnyTask:
         """Update a task's fields.
 
         Updates task-level properties like priority, due_at, or note.
@@ -941,7 +943,7 @@ class ApolloClient:
         if not fields:
             raise ValueError("At least one field must be provided")
         result = await self._put(f"/tasks/{task_id}", fields)
-        return Task.model_validate(result.get("task", {}))
+        return resolve_task(result.get("task", {}))
 
     async def update_emailer_message(
         self,

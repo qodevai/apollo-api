@@ -9,9 +9,9 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Generic, TypeVar
+from typing import Annotated, Any, Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, TypeAdapter
 
 
 class ApolloModel(BaseModel):
@@ -866,6 +866,35 @@ class LinkedInMessageTask(Task):
     opportunity_id: str | None = None
     standalone_outreach_task_message: OutreachTaskMessage | None = None
     engagement_data: EngagementData | None = None
+
+
+# ---------------------------------------------------------------------------
+# Discriminated union for polymorphic task deserialization
+# ---------------------------------------------------------------------------
+
+def _task_discriminator(v: Any) -> str:
+    raw_type = v.get("type") if isinstance(v, dict) else getattr(v, "type", None)
+    return {
+        "outreach_manual_email": "email",
+        "linkedin_step_connect": "linkedin_connect",
+        "linkedin_step_message": "linkedin_message",
+    }.get(raw_type, "base")
+
+
+AnyTask = Annotated[
+    Annotated[EmailTask, Tag("email")]
+    | Annotated[LinkedInConnectTask, Tag("linkedin_connect")]
+    | Annotated[LinkedInMessageTask, Tag("linkedin_message")]
+    | Annotated[Task, Tag("base")],
+    Discriminator(_task_discriminator),
+]
+
+_task_adapter: TypeAdapter[AnyTask] = TypeAdapter(AnyTask)
+
+
+def resolve_task(data: dict[str, Any]) -> Task:
+    """Validate a raw task dict into the most specific Task subclass."""
+    return _task_adapter.validate_python(data)
 
 
 class Email(ApolloModel):
