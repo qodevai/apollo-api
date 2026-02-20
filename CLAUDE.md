@@ -1,4 +1,4 @@
-# Apollo Client - Development Guidelines
+# qodev-apollo-api - Development Guidelines
 
 ## Development Workflow
 
@@ -124,7 +124,7 @@ Focus on:
 ```python
 @pytest.fixture
 def mock_httpx(mocker):
-    mock_client = mocker.patch("apollo.client.httpx.AsyncClient")
+    mock_client = mocker.patch("qodev_apollo_api.client.httpx.AsyncClient")
     mock_response = mocker.Mock()
     mock_response.json.return_value = {"contacts": [...]}
     mock_response.headers = {"x-rate-limit-hourly": "400"}
@@ -165,8 +165,8 @@ Use custom exceptions:
 ## Project Structure
 
 ```
-apollo-client/
-├── src/apollo/
+qodev-apollo-api/
+├── src/qodev_apollo_api/
 │   ├── __init__.py      # Public API exports
 │   ├── client.py        # ApolloClient class
 │   ├── models.py        # Pydantic models
@@ -179,7 +179,7 @@ apollo-client/
 │   └── test_utils.py
 ├── pyproject.toml       # Package configuration
 ├── Makefile             # Development commands
-├── .gitlab-ci.yml       # CI pipeline
+├── .github/workflows/   # CI/CD pipelines
 ├── .pre-commit-config.yaml
 ├── README.md
 ├── CLAUDE.md
@@ -188,18 +188,17 @@ apollo-client/
 
 ## CI/CD Pipeline
 
-GitLab CI runs on MR and main branch:
+GitHub Actions runs on push to main and PRs:
 
-**Lint stage** (parallel):
-- lint (ruff)
+**Lint jobs** (parallel):
+- lint (ruff check + format check)
 - typecheck (pyright)
-- typos (spell check)
-- format-check (ruff format)
 
-**Test stage:**
-- pytest with coverage (requires >80%)
+**Test job:**
+- pytest with coverage
 
-All jobs use Makefile commands → local dev matches CI exactly.
+**Publish** (on tag push, gated on lint + typecheck + test):
+- Trusted Publishers (OIDC) to PyPI
 
 ## Common Pitfalls
 
@@ -215,11 +214,7 @@ When migrating from old implementations:
 
 1. **Import changes:**
    ```python
-   # Old
-   from apollo.client import ApolloClient
-
-   # New
-   from apollo import ApolloClient
+   from qodev_apollo_api import ApolloClient
    ```
 
 2. **Model changes:**

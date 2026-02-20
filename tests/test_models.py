@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from apollo.models import (
+from qodev_apollo_api.models import (
     Account,
     AccountDetail,
     AccountPlaybookStatus,
@@ -738,7 +738,7 @@ def test_task_emailer_message_without_id():
 
 def test_task_email_type_enum():
     """Test TaskType.OUTREACH_MANUAL_EMAIL has correct value."""
-    from apollo.models import TaskType
+    from qodev_apollo_api.models import TaskType
 
     assert TaskType.OUTREACH_MANUAL_EMAIL == "outreach_manual_email"
     assert TaskType.OUTREACH_MANUAL_EMAIL.value == "outreach_manual_email"

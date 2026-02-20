@@ -1,6 +1,6 @@
 """Tests for Apollo exceptions."""
 
-from apollo.exceptions import APIError, ApolloError, AuthenticationError, RateLimitError
+from qodev_apollo_api.exceptions import APIError, ApolloError, AuthenticationError, RateLimitError
 
 
 def test_apollo_error_base():

@@ -1,4 +1,8 @@
-# Apollo Client
+# qodev-apollo-api
+
+[![CI](https://github.com/qodevai/apollo-api/actions/workflows/ci.yml/badge.svg)](https://github.com/qodevai/apollo-api/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/qodev-apollo-api)](https://pypi.org/project/qodev-apollo-api/)
+[![Python](https://img.shields.io/pypi/pyversions/qodev-apollo-api)](https://pypi.org/project/qodev-apollo-api/)
 
 Async Python client for Apollo.io CRM API with full type safety.
 
@@ -15,26 +19,19 @@ Async Python client for Apollo.io CRM API with full type safety.
 
 ## Installation
 
-From GitLab (using uv):
-
-```toml
-# pyproject.toml
-[project]
-dependencies = ["apollo-client"]
-
-[tool.uv.sources]
-apollo-client = { git = "git@gitlab.qodev.ai:libs/apollo.git" }
+```bash
+pip install qodev-apollo-api
 ```
 
-Then run:
+Or with uv:
 ```bash
-uv sync
+uv add qodev-apollo-api
 ```
 
 ## Quick Start
 
 ```python
-from apollo import ApolloClient
+from qodev_apollo_api import ApolloClient
 
 async with ApolloClient() as client:
     # Search contacts
@@ -276,7 +273,7 @@ All responses are typed Pydantic models:
 ## Error Handling
 
 ```python
-from apollo import ApolloClient, AuthenticationError, RateLimitError, APIError
+from qodev_apollo_api import ApolloClient, AuthenticationError, RateLimitError, APIError
 
 try:
     async with ApolloClient() as client:

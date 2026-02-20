@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from apollo.client import ApolloClient
-from apollo.models import EmailerMessage, EmailTask, Task, TaskType
+from qodev_apollo_api.client import ApolloClient
+from qodev_apollo_api.models import EmailerMessage, EmailTask, Task, TaskType
 
 
 def _make_response(data: dict) -> MagicMock:

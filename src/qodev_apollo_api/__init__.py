@@ -1,7 +1,4 @@
-"""Apollo.io API Client.
-
-Async Python client for Apollo.io CRM API with full type safety.
-"""
+"""qodev-apollo-api — Async Python client for Apollo.io CRM API with full type safety."""
 
 from .client import ApolloClient
 from .exceptions import APIError, ApolloError, AuthenticationError, RateLimitError

@@ -13,7 +13,7 @@ import asyncio
 import os
 import sys
 
-from apollo import ApolloClient
+from qodev_apollo_api import ApolloClient
 
 
 async def main() -> None:

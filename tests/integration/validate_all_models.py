@@ -8,7 +8,7 @@ import asyncio
 import os
 import sys
 
-from apollo import ApolloClient
+from qodev_apollo_api import ApolloClient
 
 if not os.getenv("APOLLO_API_KEY"):
     print("APOLLO_API_KEY not set, skipping integration test")

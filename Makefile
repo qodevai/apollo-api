@@ -1,9 +1,9 @@
-# Makefile for apollo-client - Development tasks
+# Makefile for qodev-apollo-api - Development tasks
 # Prerequisites: uv (https://docs.astral.sh/uv/)
 
 .PHONY: help
 help:
-	@printf "\nApollo Client Development Commands:\n\n"
+	@printf "\nqodev-apollo-api Development Commands:\n\n"
 	@awk '/^#/{c=substr($$0,3);next}c&&/^[[:alpha:]][[:alnum:]_-]+:/{printf "  \033[36m%-20s\033[0m %s\n", substr($$1,1,index($$1,":")-1),c}1{c=0}' $(MAKEFILE_LIST)
 	@printf "\nRun 'make install' to get started!\n\n"
 
@@ -31,7 +31,7 @@ install-hooks:
 .PHONY: test
 # Run tests with coverage
 test:
-	uv run pytest --cov=apollo --cov-report=term --cov-report=html
+	uv run pytest --cov=qodev_apollo_api --cov-report=term --cov-report=html
 
 .PHONY: test-fast
 # Run tests without coverage

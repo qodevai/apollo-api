@@ -2,7 +2,7 @@
 
 import json
 
-from apollo.utils import normalize_linkedin_url, prosemirror_to_markdown
+from qodev_apollo_api.utils import normalize_linkedin_url, prosemirror_to_markdown
 
 
 def test_prosemirror_to_markdown_simple():
