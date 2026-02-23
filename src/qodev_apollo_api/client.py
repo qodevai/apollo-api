@@ -1058,19 +1058,19 @@ class ApolloClient:
     # ========================================================================
 
     async def search_conversations(
-        self, page: int = 1, limit: int = 100, **filters
+        self, page: int = 1, limit: int = 25, **filters
     ) -> PaginatedResponse[Conversation]:
         """Search recorded conversations (Zoom/Teams/Meet).
 
         Args:
             page: Page number (default 1)
-            limit: Results per page (default 100, max 100)
+            limit: Results per page (default 25, max 25)
             **filters: Additional filters
 
         Returns:
             Paginated response with Conversation items
         """
-        data = {"page": page, "per_page": min(limit, 100), **filters}
+        data = {"page": page, "per_page": min(limit, 25), **filters}
         result = await self._post("/conversations/search", data)
 
         conversations = [Conversation.model_validate(c) for c in result.get("conversations", [])]

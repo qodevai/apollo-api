@@ -412,7 +412,21 @@ async def test_search_conversations(client: ApolloClient):
     assert len(result.items) == 1
     assert isinstance(result.items[0], Conversation)
 
-    assert client._client.request.call_args[0] == ("POST", "/conversations/search")
+    call_args = client._client.request.call_args
+    assert call_args[0] == ("POST", "/conversations/search")
+    assert call_args[1]["json"]["per_page"] == 25
+
+
+async def test_search_conversations_caps_limit(client: ApolloClient):
+    """Test search_conversations caps limit at 25 (Apollo API maximum)."""
+    client._client.request.return_value = _make_response(
+        {"conversations": [], "pagination": {"total_entries": 0}}
+    )
+
+    await client.search_conversations(limit=100)
+
+    payload = client._client.request.call_args[1]["json"]
+    assert payload["per_page"] == 25
 
 
 # ============================================================================
