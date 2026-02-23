@@ -27,6 +27,7 @@ from .models import (
     LinkedInConnectTask,
     LinkedInMessageTask,
     Note,
+    OpportunityContactRoleType,
     PaginatedResponse,
     Pipeline,
     SortOrder,
@@ -490,6 +491,28 @@ class ApolloClient:
         return PaginatedResponse[Stage](
             items=stages,
             total=len(stages),
+            page=1,
+        )
+
+    async def list_opportunity_contact_role_types(
+        self,
+    ) -> PaginatedResponse[OpportunityContactRoleType]:
+        """List all opportunity contact role types (undocumented endpoint).
+
+        Returns role type definitions (e.g., Decision Maker, Buyer, Champion)
+        that map to OpportunityRoleEntry.opportunity_contact_role_type_id.
+
+        Returns:
+            Paginated response with OpportunityContactRoleType items
+        """
+        result = await self._post("/opportunity_contact_role_types/search", {})
+        role_types = [
+            OpportunityContactRoleType.model_validate(rt)
+            for rt in result.get("opportunity_contact_role_types", [])
+        ]
+        return PaginatedResponse[OpportunityContactRoleType](
+            items=role_types,
+            total=len(role_types),
             page=1,
         )
 

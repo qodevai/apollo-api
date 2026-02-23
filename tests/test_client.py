@@ -27,6 +27,7 @@ from qodev_apollo_api.models import (
     LinkedInConnectTask,
     LinkedInMessageTask,
     Note,
+    OpportunityContactRoleType,
     PaginatedResponse,
     Pipeline,
     SortOrder,
@@ -543,6 +544,31 @@ async def test_list_all_stages(client: ApolloClient):
 
     assert isinstance(result, PaginatedResponse)
     assert len(result.items) == 2
+
+
+async def test_list_opportunity_contact_role_types(client: ApolloClient):
+    """Test POST /opportunity_contact_role_types/search returns role types."""
+    client._client.request.return_value = _make_response(
+        {
+            "opportunity_contact_role_types": [
+                {"id": "rt1", "name": "Decision Maker", "display_order": 3.0},
+                {"id": "rt2", "name": "Buyer", "display_order": 1.0},
+            ]
+        }
+    )
+
+    result = await client.list_opportunity_contact_role_types()
+
+    assert isinstance(result, PaginatedResponse)
+    assert len(result.items) == 2
+    assert all(isinstance(rt, OpportunityContactRoleType) for rt in result.items)
+    assert result.items[0].name == "Decision Maker"
+    assert result.items[1].name == "Buyer"
+    assert result.total == 2
+
+    call_args = client._client.request.call_args
+    assert call_args[0] == ("POST", "/opportunity_contact_role_types/search")
+    assert call_args[1]["json"] == {}
 
 
 async def test_get_contact_stages(client: ApolloClient):

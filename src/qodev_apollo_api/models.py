@@ -182,6 +182,22 @@ class OpportunityContactRole(ApolloModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
+    @property
+    def role_type_id(self) -> str | None:
+        """First role type ID, or None if no roles assigned."""
+        return self.role[0].opportunity_contact_role_type_id if self.role else None
+
+
+class OpportunityContactRoleType(ApolloModel):
+    """Role type definition for opportunity contact roles (e.g., Decision Maker, Buyer)."""
+
+    id: str
+    name: str | None = None
+    team_id: str | None = None
+    crm_api_name: str | None = None
+    crm_label: str | None = None
+    display_order: float | None = None
+
 
 class CrmNote(ApolloModel):
     """CRM-synced note reference."""

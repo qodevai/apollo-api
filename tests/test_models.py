@@ -52,6 +52,7 @@ from qodev_apollo_api.models import (
     LinkedInViewProfileTask,
     Note,
     OpportunityContactRole,
+    OpportunityContactRoleType,
     OpportunityRoleEntry,
     OrganizationRef,
     OtherTask,
@@ -564,6 +565,56 @@ def test_deal_with_embedded_account():
     )
     assert isinstance(deal.account, Account)
     assert deal.account.name == "Acme Corp"
+
+
+# ============================================================================
+# OPPORTUNITY CONTACT ROLE TYPE
+# ============================================================================
+
+
+def test_opportunity_contact_role_type_model():
+    """Test OpportunityContactRoleType model validation."""
+    rt = OpportunityContactRoleType.model_validate(
+        {
+            "id": "rt1",
+            "name": "Decision Maker",
+            "team_id": "team1",
+            "crm_api_name": None,
+            "crm_label": None,
+            "display_order": 3.0,
+        }
+    )
+    assert rt.id == "rt1"
+    assert rt.name == "Decision Maker"
+    assert rt.display_order == 3.0
+
+
+def test_opportunity_contact_role_type_minimal():
+    """Test OpportunityContactRoleType with only required fields."""
+    rt = OpportunityContactRoleType.model_validate({"id": "rt1"})
+    assert rt.id == "rt1"
+    assert rt.name is None
+    assert rt.display_order is None
+
+
+def test_opportunity_contact_role_role_type_id_property():
+    """Test role_type_id convenience property returns first role type ID."""
+    role = OpportunityContactRole.model_validate(
+        {
+            "id": "r1",
+            "contact_id": "c1",
+            "role": [
+                {"opportunity_contact_role_type_id": "type1", "is_primary": True},
+            ],
+        }
+    )
+    assert role.role_type_id == "type1"
+
+
+def test_opportunity_contact_role_role_type_id_empty():
+    """Test role_type_id returns None when no roles assigned."""
+    role = OpportunityContactRole.model_validate({"id": "r1", "role": []})
+    assert role.role_type_id is None
 
 
 # ============================================================================
