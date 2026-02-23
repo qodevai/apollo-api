@@ -15,6 +15,7 @@ from qodev_apollo_api.models import (
     CalendarEvent,
     Call,
     Contact,
+    ContactActionItemTask,
     ContactDetail,
     Conversation,
     ConversationDetail,
@@ -652,14 +653,14 @@ async def test_update_contact(client: ApolloClient):
 
 
 async def test_create_task(client: ApolloClient):
-    """Test POST /tasks returns Task."""
+    """Test POST /tasks returns specific Task subclass."""
     client._client.request.return_value = _make_response(
         {"task": {"id": "t_new", "type": "contact_action_item"}}
     )
 
     result = await client.create_task(contact_ids=["c1"], note="Follow up", priority="high")
 
-    assert isinstance(result, Task)
+    assert isinstance(result, ContactActionItemTask)
     assert result.id == "t_new"
 
     call_args = client._client.request.call_args
@@ -792,13 +793,11 @@ async def test_get_task(client: ApolloClient):
 
     result = await client.get_task("task_123")
 
-    assert isinstance(result, Task)
+    assert isinstance(result, EmailTask)
     assert result.id == "task_123"
     assert result.type == "outreach_manual_email"
-    # emailer_message lives on EmailTask; base Task captures it via extra="allow"
-    email_task = EmailTask.model_validate(result.model_dump())
-    assert email_task.emailer_message is not None
-    assert email_task.emailer_message.subject == "Hello"
+    assert result.emailer_message is not None
+    assert result.emailer_message.subject == "Hello"
 
     client._client.request.assert_called_once_with("GET", "/tasks/task_123")
 

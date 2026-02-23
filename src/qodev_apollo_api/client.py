@@ -32,7 +32,6 @@ from .models import (
     Pipeline,
     SortOrder,
     Stage,
-    Task,
     TaskPriority,
     TaskStatus,
     TaskType,
@@ -654,7 +653,7 @@ class ApolloClient:
             **filters: Additional filters
 
         Returns:
-            Paginated response with Task items
+            Paginated response with specific Task subclass items
         """
         data: dict[str, Any] = {"page": page, "per_page": min(limit, 100), **filters}
         if task_type_cds is not None:
@@ -706,7 +705,7 @@ class ApolloClient:
         type: TaskType | str = TaskType.CONTACT_ACTION_ITEM,
         priority: TaskPriority | str = TaskPriority.MEDIUM,
         **fields,
-    ) -> Task:
+    ) -> AnyTask:
         """Create a task.
 
         Args:
@@ -717,7 +716,7 @@ class ApolloClient:
             **fields: Additional fields (due_at, status, etc.)
 
         Returns:
-            Created Task model
+            Created Task subclass matching the task type
         """
         if not contact_ids:
             raise ValueError("contact_ids must not be empty")
@@ -729,7 +728,7 @@ class ApolloClient:
             **fields,
         }
         result = await self._post("/tasks", data)
-        return Task.model_validate(result.get("task", result))
+        return resolve_task(result.get("task", result))
 
     async def complete_task(self, task_id: str, note: str | None = None) -> AnyTask:
         """Mark a task as completed.
@@ -1013,17 +1012,17 @@ class ApolloClient:
         result = await self._get(f"/contacts/{contact_id}/calls")
         return [Call.model_validate(c) for c in result.get("calls", [])]
 
-    async def list_contact_tasks(self, contact_id: str) -> list[Task]:
+    async def list_contact_tasks(self, contact_id: str) -> list[AnyTask]:
         """List tasks for a contact.
 
         Args:
             contact_id: Contact ID
 
         Returns:
-            List of Task models
+            List of Task subclasses matching each task's type
         """
         result = await self._get(f"/contacts/{contact_id}/tasks")
-        return [Task.model_validate(t) for t in result.get("tasks", [])]
+        return [resolve_task(t) for t in result.get("tasks", [])]
 
     # ========================================================================
     # CALENDAR EVENTS

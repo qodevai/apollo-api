@@ -4,6 +4,8 @@ from datetime import datetime
 
 from qodev_apollo_api.models import (
     Account,
+    AccountActionItemTask,
+    AccountCallTask,
     AccountDetail,
     AccountPlaybookStatus,
     AccountQueue,
@@ -12,7 +14,10 @@ from qodev_apollo_api.models import (
     CallSummary,
     CallSummaryNextStep,
     CallSummaryPoint,
+    CallTask,
     Contact,
+    ContactActionItemTask,
+    ContactCallTask,
     ContactCampaignStatus,
     ContactDetail,
     ContactEmailEntry,
@@ -35,6 +40,7 @@ from qodev_apollo_api.models import (
     EngagementData,
     EngagementGraphEntry,
     EngagementTypeCount,
+    LinkedInConnectTask,
     LinkedInMessageTask,
     Note,
     OpportunityContactRole,
@@ -49,6 +55,7 @@ from qodev_apollo_api.models import (
     Technology,
     TranscriptSegment,
     VideoRecording,
+    resolve_task,
 )
 
 # ============================================================================
@@ -743,6 +750,72 @@ def test_task_email_type_enum():
 
     assert TaskType.OUTREACH_MANUAL_EMAIL == "outreach_manual_email"
     assert TaskType.OUTREACH_MANUAL_EMAIL.value == "outreach_manual_email"
+
+
+# ============================================================================
+# resolve_task — discriminated union
+# ============================================================================
+
+
+def test_resolve_task_email():
+    """Test resolve_task returns EmailTask for outreach_manual_email."""
+    result = resolve_task({"id": "1", "type": "outreach_manual_email"})
+    assert isinstance(result, EmailTask)
+
+
+def test_resolve_task_linkedin_connect():
+    """Test resolve_task returns LinkedInConnectTask."""
+    result = resolve_task({"id": "1", "type": "linkedin_step_connect"})
+    assert isinstance(result, LinkedInConnectTask)
+
+
+def test_resolve_task_linkedin_message():
+    """Test resolve_task returns LinkedInMessageTask."""
+    result = resolve_task({"id": "1", "type": "linkedin_step_message"})
+    assert isinstance(result, LinkedInMessageTask)
+
+
+def test_resolve_task_call():
+    """Test resolve_task returns CallTask."""
+    result = resolve_task({"id": "1", "type": "call"})
+    assert isinstance(result, CallTask)
+
+
+def test_resolve_task_account_call():
+    """Test resolve_task returns AccountCallTask."""
+    result = resolve_task({"id": "1", "type": "account_call"})
+    assert isinstance(result, AccountCallTask)
+
+
+def test_resolve_task_contact_call():
+    """Test resolve_task returns ContactCallTask."""
+    result = resolve_task({"id": "1", "type": "contact_call"})
+    assert isinstance(result, ContactCallTask)
+
+
+def test_resolve_task_contact_action_item():
+    """Test resolve_task returns ContactActionItemTask."""
+    result = resolve_task({"id": "1", "type": "contact_action_item"})
+    assert isinstance(result, ContactActionItemTask)
+
+
+def test_resolve_task_account_action_item():
+    """Test resolve_task returns AccountActionItemTask."""
+    result = resolve_task({"id": "1", "type": "account_action_item"})
+    assert isinstance(result, AccountActionItemTask)
+
+
+def test_resolve_task_all_subtypes_are_task():
+    """Test all resolve_task results are Task subclasses."""
+    for task_type in TaskType:
+        result = resolve_task({"id": "1", "type": task_type.value})
+        assert isinstance(result, Task), f"{task_type} did not resolve to a Task subclass"
+
+
+def test_resolve_task_missing_type_falls_back():
+    """Test resolve_task falls back to base Task when type is missing."""
+    result = resolve_task({"id": "1", "status": "complete"})
+    assert type(result) is Task
 
 
 def test_task_with_full_emailer_message():

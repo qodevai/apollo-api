@@ -11,7 +11,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Discriminator, Field, Tag, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Discriminator, Field, TypeAdapter
 
 
 class ApolloModel(BaseModel):
@@ -866,36 +866,106 @@ class LinkedInMessageTask(Task):
     """LinkedIn message task (linkedin_step_message) for existing connections."""
 
     type: Literal[TaskType.LINKEDIN_STEP_MESSAGE] = TaskType.LINKEDIN_STEP_MESSAGE
+    opportunity_id: str | None = None
     standalone_outreach_task_message: OutreachTaskMessage | None = None
     engagement_data: EngagementData | None = None
+
+
+class CallTask(Task):
+    """Generic call task."""
+
+    type: Literal[TaskType.CALL] = TaskType.CALL
+
+
+class AccountCallTask(Task):
+    """Account-level call task."""
+
+    type: Literal[TaskType.ACCOUNT_CALL] = TaskType.ACCOUNT_CALL
+
+
+class ContactCallTask(Task):
+    """Contact-level call task."""
+
+    type: Literal[TaskType.CONTACT_CALL] = TaskType.CONTACT_CALL
+
+
+class LinkedInInteractTask(Task):
+    """LinkedIn post interaction task."""
+
+    type: Literal[TaskType.LINKEDIN_STEP_INTERACT] = TaskType.LINKEDIN_STEP_INTERACT
+
+
+class LinkedInViewProfileTask(Task):
+    """LinkedIn profile view task."""
+
+    type: Literal[TaskType.LINKEDIN_STEP_VIEW_PROFILE] = TaskType.LINKEDIN_STEP_VIEW_PROFILE
+
+
+class LinkedInActionsTask(Task):
+    """Generic LinkedIn actions task."""
+
+    type: Literal[TaskType.LINKEDIN_ACTIONS] = TaskType.LINKEDIN_ACTIONS
+
+
+class ContactActionItemTask(Task):
+    """Contact-level action item task."""
+
+    type: Literal[TaskType.CONTACT_ACTION_ITEM] = TaskType.CONTACT_ACTION_ITEM
+
+
+class AccountActionItemTask(Task):
+    """Account-level action item task."""
+
+    type: Literal[TaskType.ACCOUNT_ACTION_ITEM] = TaskType.ACCOUNT_ACTION_ITEM
 
 
 # ---------------------------------------------------------------------------
 # Discriminated union for polymorphic task deserialization
 # ---------------------------------------------------------------------------
 
-
-def _task_discriminator(v: Any) -> str:
-    raw_type = v.get("type") if isinstance(v, dict) else getattr(v, "type", None)
-    if isinstance(raw_type, TaskType):
-        return raw_type.value
-    return raw_type or "base"
-
-
-AnyTask = Annotated[
-    Annotated[EmailTask, Tag(TaskType.OUTREACH_MANUAL_EMAIL)]
-    | Annotated[LinkedInConnectTask, Tag(TaskType.LINKEDIN_STEP_CONNECT)]
-    | Annotated[LinkedInMessageTask, Tag(TaskType.LINKEDIN_STEP_MESSAGE)]
-    | Annotated[Task, Tag("base")],
-    Discriminator(_task_discriminator),
+_DiscriminatedTask = Annotated[
+    CallTask
+    | AccountCallTask
+    | ContactCallTask
+    | EmailTask
+    | LinkedInConnectTask
+    | LinkedInMessageTask
+    | LinkedInInteractTask
+    | LinkedInViewProfileTask
+    | LinkedInActionsTask
+    | ContactActionItemTask
+    | AccountActionItemTask,
+    Discriminator("type"),
 ]
 
-_task_adapter: TypeAdapter[AnyTask] = TypeAdapter(AnyTask)
+# Public type: includes base Task for unknown/missing type fallback
+AnyTask = (
+    CallTask
+    | AccountCallTask
+    | ContactCallTask
+    | EmailTask
+    | LinkedInConnectTask
+    | LinkedInMessageTask
+    | LinkedInInteractTask
+    | LinkedInViewProfileTask
+    | LinkedInActionsTask
+    | ContactActionItemTask
+    | AccountActionItemTask
+    | Task
+)
+
+_task_adapter: TypeAdapter[_DiscriminatedTask] = TypeAdapter(_DiscriminatedTask)
+_KNOWN_TASK_TYPES = {t.value for t in TaskType}
 
 
-def resolve_task(data: dict[str, Any]) -> Task:
-    """Validate a raw task dict into the most specific Task subclass."""
-    return _task_adapter.validate_python(data)
+def resolve_task(data: dict[str, Any]) -> AnyTask:
+    """Validate a raw task dict into the most specific Task subclass.
+
+    Falls back to base Task if the type field is missing or unrecognized.
+    """
+    if data.get("type") in _KNOWN_TASK_TYPES:
+        return _task_adapter.validate_python(data)
+    return Task.model_validate(data)
 
 
 class Email(ApolloModel):
