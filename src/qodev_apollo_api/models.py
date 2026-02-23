@@ -11,7 +11,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any, Generic, Literal, TypeAlias, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Discriminator, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Discriminator, Field, TypeAdapter, ValidationError
 
 
 class ApolloModel(BaseModel):
@@ -775,6 +775,7 @@ class TaskType(StrEnum):
     LINKEDIN_ACTIONS = "linkedin_actions"
     CONTACT_ACTION_ITEM = "contact_action_item"
     ACCOUNT_ACTION_ITEM = "account_action_item"
+    ACTION_ITEM = "action_item"
 
 
 class LinkedInTemplate(ApolloModel):
@@ -919,6 +920,23 @@ class AccountActionItemTask(BaseTask):
     type: Literal[TaskType.ACCOUNT_ACTION_ITEM] = TaskType.ACCOUNT_ACTION_ITEM
 
 
+class ActionItemTask(BaseTask):
+    """Generic action item task."""
+
+    type: Literal[TaskType.ACTION_ITEM] = TaskType.ACTION_ITEM
+
+
+class OtherTask(BaseTask):
+    """Fallback for task types not yet modelled in the library.
+
+    Used by resolve_task() when the API returns a type value that doesn't
+    match any known TaskType variant.  Prevents unknown types from crashing
+    consumers' syncs.
+    """
+
+    type: str | None = None  # type: ignore[assignment]
+
+
 # ---------------------------------------------------------------------------
 # Discriminated union for polymorphic task deserialization
 # ---------------------------------------------------------------------------
@@ -934,7 +952,8 @@ _DiscriminatedTask = Annotated[
     | LinkedInViewProfileTask
     | LinkedInActionsTask
     | ContactActionItemTask
-    | AccountActionItemTask,
+    | AccountActionItemTask
+    | ActionItemTask,
     Discriminator("type"),
 ]
 
@@ -950,6 +969,8 @@ Task: TypeAlias = (
     | LinkedInActionsTask
     | ContactActionItemTask
     | AccountActionItemTask
+    | ActionItemTask
+    | OtherTask
 )
 
 _task_adapter: TypeAdapter[_DiscriminatedTask] = TypeAdapter(_DiscriminatedTask)
@@ -958,9 +979,15 @@ _task_adapter: TypeAdapter[_DiscriminatedTask] = TypeAdapter(_DiscriminatedTask)
 def resolve_task(data: dict[str, Any]) -> Task:
     """Validate a raw task dict into the most specific Task subclass.
 
-    Raises ValidationError if the type field is missing or unrecognized.
+    Falls back to OtherTask for unknown task types so that unrecognised
+    types returned by the API don't crash consumers.
+    Raises ValidationError only if the data is structurally invalid
+    (e.g. missing required ``id`` field).
     """
-    return _task_adapter.validate_python(data)
+    try:
+        return _task_adapter.validate_python(data)
+    except ValidationError:
+        return OtherTask.model_validate(data)
 
 
 class Email(ApolloModel):

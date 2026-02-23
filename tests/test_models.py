@@ -2,9 +2,6 @@
 
 from datetime import datetime
 
-import pytest
-from pydantic import ValidationError
-
 from qodev_apollo_api.models import (
     Account,
     AccountActionItemTask,
@@ -12,6 +9,7 @@ from qodev_apollo_api.models import (
     AccountDetail,
     AccountPlaybookStatus,
     AccountQueue,
+    ActionItemTask,
     ApolloModel,
     BaseTask,
     Call,
@@ -53,6 +51,7 @@ from qodev_apollo_api.models import (
     OpportunityContactRole,
     OpportunityRoleEntry,
     OrganizationRef,
+    OtherTask,
     PaginatedResponse,
     PhoneEntry,
     Pipeline,
@@ -811,6 +810,12 @@ def test_resolve_task_account_action_item():
     assert isinstance(result, AccountActionItemTask)
 
 
+def test_resolve_task_action_item():
+    """Test resolve_task returns ActionItemTask."""
+    result = resolve_task({"id": "1", "type": "action_item"})
+    assert isinstance(result, ActionItemTask)
+
+
 def test_resolve_task_linkedin_interact():
     """Test resolve_task returns LinkedInInteractTask."""
     result = resolve_task({"id": "1", "type": "linkedin_step_interact_post"})
@@ -836,16 +841,19 @@ def test_resolve_task_all_subtypes_are_base_task():
         assert isinstance(result, BaseTask), f"{task_type} did not resolve to a BaseTask subclass"
 
 
-def test_resolve_task_missing_type_raises():
-    """Test resolve_task raises ValidationError when type is missing."""
-    with pytest.raises(ValidationError):
-        resolve_task({"id": "1", "status": "complete"})
+def test_resolve_task_missing_type_falls_back_to_other_task():
+    """Test resolve_task falls back to OtherTask when type is missing."""
+    result = resolve_task({"id": "1", "status": "complete"})
+    assert isinstance(result, OtherTask)
+    assert result.type is None
 
 
-def test_resolve_task_unknown_type_raises():
-    """Test resolve_task raises ValidationError for unknown type values."""
-    with pytest.raises(ValidationError):
-        resolve_task({"id": "1", "type": "some_future_task_type"})
+def test_resolve_task_unknown_type_falls_back_to_other_task():
+    """Test resolve_task falls back to OtherTask for unknown type values."""
+    result = resolve_task({"id": "1", "type": "some_future_task_type"})
+    assert isinstance(result, OtherTask)
+    assert result.type == "some_future_task_type"
+    assert result.id == "1"
 
 
 def test_task_with_full_emailer_message():
