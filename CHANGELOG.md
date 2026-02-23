@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `ActionItemTask` subclass for `action_item` task type
+- `OtherTask` fallback subclass — `resolve_task()` now returns `OtherTask` for unknown task types instead of raising `ValidationError`
+
 ### Fixed
 - `Deal.closed_date`, `Deal.actual_close_date`, `Deal.next_step_date` now parsed as `datetime` (were `str`)
 - `EmploymentHistory.start_date`, `EmploymentHistory.end_date` now parsed as `date` (were `str`)
