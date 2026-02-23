@@ -1,6 +1,6 @@
 """Tests for Apollo models."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -1036,7 +1036,7 @@ def test_call_summary_with_structured_items():
     assert len(summary.next_steps) == 1
     assert isinstance(summary.next_steps[0], CallSummaryNextStep)
     assert summary.next_steps[0].step == "Schedule demo"
-    assert summary.next_steps[0].due_at == "2026-02-24T00:00:00Z"
+    assert summary.next_steps[0].due_at == datetime(2026, 2, 24, tzinfo=UTC)
     assert len(summary.pain_points) == 1
     assert isinstance(summary.pain_points[0], CallSummaryPoint)
     assert summary.pain_points[0].text == "Catching bugs early"
