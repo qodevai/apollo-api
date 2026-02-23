@@ -10,6 +10,7 @@ from qodev_apollo_api.models import (
     AccountPlaybookStatus,
     AccountQueue,
     ApolloModel,
+    BaseTask,
     Call,
     CallSummary,
     CallSummaryNextStep,
@@ -53,7 +54,6 @@ from qodev_apollo_api.models import (
     PhoneEntry,
     Pipeline,
     Stage,
-    Task,
     TaskType,
     Technology,
     TranscriptSegment,
@@ -675,9 +675,9 @@ def test_call_with_embedded_contact():
 # ============================================================================
 
 
-def test_task_model():
-    """Test Task model validation."""
-    task = Task(
+def test_base_task_model():
+    """Test BaseTask model validation."""
+    task = BaseTask(
         id="task_123",
         contact_id="contact_1",
         type="contact_action_item",
@@ -826,23 +826,23 @@ def test_resolve_task_linkedin_actions():
     assert isinstance(result, LinkedInActionsTask)
 
 
-def test_resolve_task_all_subtypes_are_task():
-    """Test all resolve_task results are Task subclasses."""
+def test_resolve_task_all_subtypes_are_base_task():
+    """Test all resolve_task results are BaseTask subclasses."""
     for task_type in TaskType:
         result = resolve_task({"id": "1", "type": task_type.value})
-        assert isinstance(result, Task), f"{task_type} did not resolve to a Task subclass"
+        assert isinstance(result, BaseTask), f"{task_type} did not resolve to a BaseTask subclass"
 
 
 def test_resolve_task_missing_type_falls_back():
-    """Test resolve_task falls back to base Task when type is missing."""
+    """Test resolve_task falls back to BaseTask when type is missing."""
     result = resolve_task({"id": "1", "status": "complete"})
-    assert type(result) is Task
+    assert type(result) is BaseTask
 
 
 def test_resolve_task_unknown_type_falls_back():
-    """Test resolve_task falls back to base Task for unknown future type values."""
+    """Test resolve_task falls back to BaseTask for unknown future type values."""
     result = resolve_task({"id": "1", "type": "some_future_task_type", "title": "Future"})
-    assert type(result) is Task
+    assert type(result) is BaseTask
     assert result.type is None
     assert result.title == "Future"
 

@@ -14,7 +14,6 @@ from .exceptions import APIError, AuthenticationError, RateLimitError
 from .models import (
     Account,
     AccountDetail,
-    AnyTask,
     CalendarEvent,
     Call,
     Contact,
@@ -32,6 +31,7 @@ from .models import (
     Pipeline,
     SortOrder,
     Stage,
+    Task,
     TaskPriority,
     TaskStatus,
     TaskType,
@@ -636,7 +636,7 @@ class ApolloClient:
         user_ids: list[str] | None = None,
         sort: list[tuple[str, SortOrder]] | None = None,
         **filters,
-    ) -> PaginatedResponse[AnyTask]:
+    ) -> PaginatedResponse[Task]:
         """Search task activities.
 
         Args:
@@ -667,7 +667,7 @@ class ApolloClient:
         tasks = [resolve_task(t) for t in result.get("tasks", [])]
         pagination = result.get("pagination", {})
 
-        return PaginatedResponse[AnyTask](
+        return PaginatedResponse[Task](
             items=tasks,
             total=pagination.get("total_entries", len(tasks)),
             page=page,
@@ -705,7 +705,7 @@ class ApolloClient:
         type: TaskType | str = TaskType.CONTACT_ACTION_ITEM,
         priority: TaskPriority | str = TaskPriority.MEDIUM,
         **fields,
-    ) -> AnyTask:
+    ) -> Task:
         """Create a task.
 
         Args:
@@ -730,7 +730,7 @@ class ApolloClient:
         result = await self._post("/tasks", data)
         return resolve_task(result.get("task", result))
 
-    async def complete_task(self, task_id: str, note: str | None = None) -> AnyTask:
+    async def complete_task(self, task_id: str, note: str | None = None) -> Task:
         """Mark a task as completed.
 
         Args:
@@ -746,7 +746,7 @@ class ApolloClient:
         result = await self._post(f"/tasks/{task_id}/complete", data)
         return resolve_task(result.get("task", result))
 
-    async def get_task(self, task_id: str) -> AnyTask:
+    async def get_task(self, task_id: str) -> Task:
         """Get task details by ID.
 
         Args:
@@ -925,7 +925,7 @@ class ApolloClient:
         }
         return await self._post("/tasks/bulk_skip", data)
 
-    async def update_task(self, task_id: str, **fields) -> AnyTask:
+    async def update_task(self, task_id: str, **fields) -> Task:
         """Update a task's fields.
 
         Updates task-level properties like priority, due_at, or note.
@@ -1012,7 +1012,7 @@ class ApolloClient:
         result = await self._get(f"/contacts/{contact_id}/calls")
         return [Call.model_validate(c) for c in result.get("calls", [])]
 
-    async def list_contact_tasks(self, contact_id: str) -> list[AnyTask]:
+    async def list_contact_tasks(self, contact_id: str) -> list[Task]:
         """List tasks for a contact.
 
         Args:

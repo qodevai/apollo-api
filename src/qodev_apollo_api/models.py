@@ -792,7 +792,7 @@ class OutreachTaskMessage(ApolloModel):
     subject: str | None = None
 
 
-class Task(ApolloModel):
+class BaseTask(ApolloModel):
     """Base task activity model with fields common to all task types."""
 
     id: str
@@ -843,7 +843,7 @@ class Task(ApolloModel):
     created_at: datetime | None = None
 
 
-class EmailTask(Task):
+class EmailTask(BaseTask):
     """Email task (outreach_manual_email) with emailer_message companion."""
 
     type: Literal[TaskType.OUTREACH_MANUAL_EMAIL] = TaskType.OUTREACH_MANUAL_EMAIL
@@ -851,7 +851,7 @@ class EmailTask(Task):
     engagement_data: EngagementData | None = None
 
 
-class LinkedInConnectTask(Task):
+class LinkedInConnectTask(BaseTask):
     """LinkedIn connection request task (linkedin_step_connect)."""
 
     type: Literal[TaskType.LINKEDIN_STEP_CONNECT] = TaskType.LINKEDIN_STEP_CONNECT
@@ -862,7 +862,7 @@ class LinkedInConnectTask(Task):
     campaign_position: int | None = None
 
 
-class LinkedInMessageTask(Task):
+class LinkedInMessageTask(BaseTask):
     """LinkedIn message task (linkedin_step_message) for existing connections."""
 
     type: Literal[TaskType.LINKEDIN_STEP_MESSAGE] = TaskType.LINKEDIN_STEP_MESSAGE
@@ -871,49 +871,49 @@ class LinkedInMessageTask(Task):
     engagement_data: EngagementData | None = None
 
 
-class CallTask(Task):
+class CallTask(BaseTask):
     """Generic call task."""
 
     type: Literal[TaskType.CALL] = TaskType.CALL
 
 
-class AccountCallTask(Task):
+class AccountCallTask(BaseTask):
     """Account-level call task."""
 
     type: Literal[TaskType.ACCOUNT_CALL] = TaskType.ACCOUNT_CALL
 
 
-class ContactCallTask(Task):
+class ContactCallTask(BaseTask):
     """Contact-level call task."""
 
     type: Literal[TaskType.CONTACT_CALL] = TaskType.CONTACT_CALL
 
 
-class LinkedInInteractTask(Task):
+class LinkedInInteractTask(BaseTask):
     """LinkedIn post interaction task."""
 
     type: Literal[TaskType.LINKEDIN_STEP_INTERACT] = TaskType.LINKEDIN_STEP_INTERACT
 
 
-class LinkedInViewProfileTask(Task):
+class LinkedInViewProfileTask(BaseTask):
     """LinkedIn profile view task."""
 
     type: Literal[TaskType.LINKEDIN_STEP_VIEW_PROFILE] = TaskType.LINKEDIN_STEP_VIEW_PROFILE
 
 
-class LinkedInActionsTask(Task):
+class LinkedInActionsTask(BaseTask):
     """Generic LinkedIn actions task."""
 
     type: Literal[TaskType.LINKEDIN_ACTIONS] = TaskType.LINKEDIN_ACTIONS
 
 
-class ContactActionItemTask(Task):
+class ContactActionItemTask(BaseTask):
     """Contact-level action item task."""
 
     type: Literal[TaskType.CONTACT_ACTION_ITEM] = TaskType.CONTACT_ACTION_ITEM
 
 
-class AccountActionItemTask(Task):
+class AccountActionItemTask(BaseTask):
     """Account-level action item task."""
 
     type: Literal[TaskType.ACCOUNT_ACTION_ITEM] = TaskType.ACCOUNT_ACTION_ITEM
@@ -938,8 +938,8 @@ _DiscriminatedTask = Annotated[
     Discriminator("type"),
 ]
 
-# Public type: includes base Task for unknown/missing type fallback
-AnyTask: TypeAlias = (
+# Public type: includes BaseTask for unknown/missing type fallback
+Task: TypeAlias = (
     CallTask
     | AccountCallTask
     | ContactCallTask
@@ -951,24 +951,24 @@ AnyTask: TypeAlias = (
     | LinkedInActionsTask
     | ContactActionItemTask
     | AccountActionItemTask
-    | Task
+    | BaseTask
 )
 
 _task_adapter: TypeAdapter[_DiscriminatedTask] = TypeAdapter(_DiscriminatedTask)
 
 
-def resolve_task(data: dict[str, Any]) -> AnyTask:
+def resolve_task(data: dict[str, Any]) -> Task:
     """Validate a raw task dict into the most specific Task subclass.
 
-    Falls back to base Task if the type field is missing or unrecognized.
+    Falls back to BaseTask if the type field is missing or unrecognized.
     """
     try:
         return _task_adapter.validate_python(data)
     except ValidationError:
-        # Unknown or missing type — fall back to base Task.
+        # Unknown or missing type — fall back to BaseTask.
         # Nullify type so StrEnum validation doesn't reject unknown values.
         fallback = {**data, "type": None} if data.get("type") is not None else data
-        return Task.model_validate(fallback)
+        return BaseTask.model_validate(fallback)
 
 
 class Email(ApolloModel):

@@ -12,6 +12,7 @@ from qodev_apollo_api.exceptions import APIError, AuthenticationError, RateLimit
 from qodev_apollo_api.models import (
     Account,
     AccountDetail,
+    BaseTask,
     CalendarEvent,
     Call,
     Contact,
@@ -30,7 +31,6 @@ from qodev_apollo_api.models import (
     Pipeline,
     SortOrder,
     Stage,
-    Task,
     TaskType,
 )
 
@@ -298,7 +298,7 @@ async def test_search_tasks(client: ApolloClient):
 
     assert isinstance(result, PaginatedResponse)
     assert len(result.items) == 1
-    assert isinstance(result.items[0], Task)
+    assert isinstance(result.items[0], BaseTask)
 
     assert client._client.request.call_args[0] == ("POST", "/tasks/search")
 
@@ -581,7 +581,7 @@ async def test_list_contact_tasks(client: ApolloClient):
 
     assert isinstance(result, list)
     assert len(result) == 2
-    assert all(isinstance(t, Task) for t in result)
+    assert all(isinstance(t, BaseTask) for t in result)
     client._client.request.assert_called_once_with("GET", "/contacts/c1/tasks")
 
 
@@ -685,7 +685,7 @@ async def test_complete_task(client: ApolloClient):
 
     result = await client.complete_task("t1")
 
-    assert isinstance(result, Task)
+    assert isinstance(result, BaseTask)
     assert result.status == "complete"
 
     call_args = client._client.request.call_args
@@ -894,7 +894,7 @@ async def test_update_task_basic(client: ApolloClient):
 
     result = await client.update_task("task_123", priority="high")
 
-    assert isinstance(result, Task)
+    assert isinstance(result, BaseTask)
     assert result.id == "task_123"
 
     call_args = client._client.request.call_args
@@ -912,7 +912,7 @@ async def test_update_task_due_at(client: ApolloClient):
 
     result = await client.update_task("task_123", due_at="2026-02-19T10:00:00Z")
 
-    assert isinstance(result, Task)
+    assert isinstance(result, BaseTask)
     payload = client._client.request.call_args[1]["json"]
     assert payload["due_at"] == "2026-02-19T10:00:00Z"
 
