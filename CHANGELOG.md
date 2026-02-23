@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `ActionItemTask` subclass for `action_item` task type
 - `OtherTask` fallback subclass — `resolve_task()` now returns `OtherTask` for unknown task types instead of raising `ValidationError`
+- `OpportunityContactRoleType` model for role type definitions (Decision Maker, Buyer, etc.)
+- `ApolloClient.list_opportunity_contact_role_types()` — lookup endpoint for role type ID → name mapping (undocumented `POST /opportunity_contact_role_types/search`)
 
 ### Fixed
 - `Deal.closed_date`, `Deal.actual_close_date`, `Deal.next_step_date` now parsed as `datetime` (were `str`)

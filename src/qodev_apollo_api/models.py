@@ -183,6 +183,17 @@ class OpportunityContactRole(ApolloModel):
     updated_at: datetime | None = None
 
 
+class OpportunityContactRoleType(ApolloModel):
+    """Role type definition for opportunity contact roles (e.g., Decision Maker, Buyer)."""
+
+    id: str
+    name: str | None = None
+    team_id: str | None = None
+    crm_api_name: str | None = None
+    crm_label: str | None = None
+    display_order: float | None = None
+
+
 class CrmNote(ApolloModel):
     """CRM-synced note reference."""
 

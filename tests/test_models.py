@@ -52,6 +52,7 @@ from qodev_apollo_api.models import (
     LinkedInViewProfileTask,
     Note,
     OpportunityContactRole,
+    OpportunityContactRoleType,
     OpportunityRoleEntry,
     OrganizationRef,
     OtherTask,
@@ -564,6 +565,36 @@ def test_deal_with_embedded_account():
     )
     assert isinstance(deal.account, Account)
     assert deal.account.name == "Acme Corp"
+
+
+# ============================================================================
+# OPPORTUNITY CONTACT ROLE TYPE
+# ============================================================================
+
+
+def test_opportunity_contact_role_type_model():
+    """Test OpportunityContactRoleType model validation."""
+    rt = OpportunityContactRoleType.model_validate(
+        {
+            "id": "rt1",
+            "name": "Decision Maker",
+            "team_id": "team1",
+            "crm_api_name": None,
+            "crm_label": None,
+            "display_order": 3.0,
+        }
+    )
+    assert rt.id == "rt1"
+    assert rt.name == "Decision Maker"
+    assert rt.display_order == 3.0
+
+
+def test_opportunity_contact_role_type_minimal():
+    """Test OpportunityContactRoleType with only required fields."""
+    rt = OpportunityContactRoleType.model_validate({"id": "rt1"})
+    assert rt.id == "rt1"
+    assert rt.name is None
+    assert rt.display_order is None
 
 
 # ============================================================================
