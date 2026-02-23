@@ -11,7 +11,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any, Generic, Literal, TypeAlias, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Discriminator, Field, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, Discriminator, Field, TypeAdapter
 
 
 class ApolloModel(BaseModel):
@@ -938,7 +938,6 @@ _DiscriminatedTask = Annotated[
     Discriminator("type"),
 ]
 
-# Public type: includes BaseTask for unknown/missing type fallback
 Task: TypeAlias = (
     CallTask
     | AccountCallTask
@@ -951,7 +950,6 @@ Task: TypeAlias = (
     | LinkedInActionsTask
     | ContactActionItemTask
     | AccountActionItemTask
-    | BaseTask
 )
 
 _task_adapter: TypeAdapter[_DiscriminatedTask] = TypeAdapter(_DiscriminatedTask)
@@ -960,15 +958,9 @@ _task_adapter: TypeAdapter[_DiscriminatedTask] = TypeAdapter(_DiscriminatedTask)
 def resolve_task(data: dict[str, Any]) -> Task:
     """Validate a raw task dict into the most specific Task subclass.
 
-    Falls back to BaseTask if the type field is missing or unrecognized.
+    Raises ValidationError if the type field is missing or unrecognized.
     """
-    try:
-        return _task_adapter.validate_python(data)
-    except ValidationError:
-        # Unknown or missing type — fall back to BaseTask.
-        # Nullify type so StrEnum validation doesn't reject unknown values.
-        fallback = {**data, "type": None} if data.get("type") is not None else data
-        return BaseTask.model_validate(fallback)
+    return _task_adapter.validate_python(data)
 
 
 class Email(ApolloModel):

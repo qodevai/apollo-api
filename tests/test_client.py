@@ -575,7 +575,9 @@ async def test_list_contact_calls(client: ApolloClient):
 
 async def test_list_contact_tasks(client: ApolloClient):
     """Test GET /contacts/{id}/tasks returns list[Task]."""
-    client._client.request.return_value = _make_response({"tasks": [{"id": "t1"}, {"id": "t2"}]})
+    client._client.request.return_value = _make_response(
+        {"tasks": [{"id": "t1", "type": "call"}, {"id": "t2", "type": "contact_action_item"}]}
+    )
 
     result = await client.list_contact_tasks("c1")
 
@@ -680,7 +682,7 @@ async def test_create_task_empty_contact_ids_raises(client: ApolloClient):
 async def test_complete_task(client: ApolloClient):
     """Test POST /tasks/{id}/complete."""
     client._client.request.return_value = _make_response(
-        {"task": {"id": "t1", "status": "complete"}}
+        {"task": {"id": "t1", "type": "call", "status": "complete"}}
     )
 
     result = await client.complete_task("t1")
@@ -697,7 +699,7 @@ async def test_complete_task(client: ApolloClient):
 async def test_complete_task_with_note(client: ApolloClient):
     """Test complete_task passes note in payload."""
     client._client.request.return_value = _make_response(
-        {"task": {"id": "t1", "status": "complete"}}
+        {"task": {"id": "t1", "type": "call", "status": "complete"}}
     )
 
     await client.complete_task("t1", note="Done via API")
@@ -889,7 +891,7 @@ async def test_update_task_basic(client: ApolloClient):
     """Test basic task update."""
     assert client._client is not None
     client._client.request.return_value = _make_response(
-        {"task": {"id": "task_123", "priority": "high"}}
+        {"task": {"id": "task_123", "type": "contact_action_item", "priority": "high"}}
     )
 
     result = await client.update_task("task_123", priority="high")
@@ -907,7 +909,7 @@ async def test_update_task_due_at(client: ApolloClient):
     """Test updating task due_at field."""
     assert client._client is not None
     client._client.request.return_value = _make_response(
-        {"task": {"id": "task_123", "due_at": "2026-02-19T10:00:00Z"}}
+        {"task": {"id": "task_123", "type": "call", "due_at": "2026-02-19T10:00:00Z"}}
     )
 
     result = await client.update_task("task_123", due_at="2026-02-19T10:00:00Z")

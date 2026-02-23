@@ -2,6 +2,9 @@
 
 from datetime import datetime
 
+import pytest
+from pydantic import ValidationError
+
 from qodev_apollo_api.models import (
     Account,
     AccountActionItemTask,
@@ -833,18 +836,16 @@ def test_resolve_task_all_subtypes_are_base_task():
         assert isinstance(result, BaseTask), f"{task_type} did not resolve to a BaseTask subclass"
 
 
-def test_resolve_task_missing_type_falls_back():
-    """Test resolve_task falls back to BaseTask when type is missing."""
-    result = resolve_task({"id": "1", "status": "complete"})
-    assert type(result) is BaseTask
+def test_resolve_task_missing_type_raises():
+    """Test resolve_task raises ValidationError when type is missing."""
+    with pytest.raises(ValidationError):
+        resolve_task({"id": "1", "status": "complete"})
 
 
-def test_resolve_task_unknown_type_falls_back():
-    """Test resolve_task falls back to BaseTask for unknown future type values."""
-    result = resolve_task({"id": "1", "type": "some_future_task_type", "title": "Future"})
-    assert type(result) is BaseTask
-    assert result.type is None
-    assert result.title == "Future"
+def test_resolve_task_unknown_type_raises():
+    """Test resolve_task raises ValidationError for unknown type values."""
+    with pytest.raises(ValidationError):
+        resolve_task({"id": "1", "type": "some_future_task_type"})
 
 
 def test_task_with_full_emailer_message():
