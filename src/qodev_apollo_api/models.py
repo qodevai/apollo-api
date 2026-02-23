@@ -776,6 +776,7 @@ class TaskType(StrEnum):
     CONTACT_ACTION_ITEM = "contact_action_item"
     ACCOUNT_ACTION_ITEM = "account_action_item"
     ACTION_ITEM = "action_item"
+    OTHER = "other"
 
 
 class LinkedInTemplate(ApolloModel):
@@ -930,11 +931,12 @@ class OtherTask(BaseTask):
     """Fallback for task types not yet modelled in the library.
 
     Used by resolve_task() when the API returns a type value that doesn't
-    match any known TaskType variant.  Prevents unknown types from crashing
-    consumers' syncs.
+    match any known TaskType variant.  The raw type string from the API
+    is preserved in ``original_type``.
     """
 
-    type: str | None = None  # type: ignore[assignment]
+    type: Literal[TaskType.OTHER] = TaskType.OTHER
+    original_type: str
 
 
 # ---------------------------------------------------------------------------
@@ -979,15 +981,18 @@ _task_adapter: TypeAdapter[_DiscriminatedTask] = TypeAdapter(_DiscriminatedTask)
 def resolve_task(data: dict[str, Any]) -> Task:
     """Validate a raw task dict into the most specific Task subclass.
 
-    Falls back to OtherTask for unknown task types so that unrecognised
-    types returned by the API don't crash consumers.
+    Falls back to OtherTask for unknown task types.  The raw type string
+    is preserved in ``OtherTask.original_type``.
     Raises ValidationError only if the data is structurally invalid
     (e.g. missing required ``id`` field).
     """
     try:
         return _task_adapter.validate_python(data)
     except ValidationError:
-        return OtherTask.model_validate(data)
+        raw_type = data.get("type")
+        if raw_type is None:
+            raise
+        return OtherTask.model_validate({**data, "type": "other", "original_type": raw_type})
 
 
 class Email(ApolloModel):
