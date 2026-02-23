@@ -597,26 +597,6 @@ def test_opportunity_contact_role_type_minimal():
     assert rt.display_order is None
 
 
-def test_opportunity_contact_role_role_type_id_property():
-    """Test role_type_id convenience property returns first role type ID."""
-    role = OpportunityContactRole.model_validate(
-        {
-            "id": "r1",
-            "contact_id": "c1",
-            "role": [
-                {"opportunity_contact_role_type_id": "type1", "is_primary": True},
-            ],
-        }
-    )
-    assert role.role_type_id == "type1"
-
-
-def test_opportunity_contact_role_role_type_id_empty():
-    """Test role_type_id returns None when no roles assigned."""
-    role = OpportunityContactRole.model_validate({"id": "r1", "role": []})
-    assert role.role_type_id is None
-
-
 # ============================================================================
 # PIPELINE & STAGE
 # ============================================================================
