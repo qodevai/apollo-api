@@ -6,7 +6,7 @@ All models use extra="allow" to capture any new/undocumented API fields.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any, Generic, Literal, TypeAlias, TypeVar
@@ -346,8 +346,8 @@ class EmploymentHistory(ApolloModel):
     title: str | None = None
     organization_name: str | None = None
     organization_id: str | None = None
-    start_date: str | None = None
-    end_date: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
 
     # Additional fields from API
     key: str | None = None
@@ -554,8 +554,8 @@ class Deal(ApolloModel):
     created_by_id: str | None = None
 
     # Close
-    closed_date: str | None = None
-    actual_close_date: str | None = None
+    closed_date: datetime | None = None
+    actual_close_date: datetime | None = None
     is_closed: bool | None = None
     is_won: bool | None = None
     closed_lost_reason: str | None = None
@@ -563,7 +563,7 @@ class Deal(ApolloModel):
 
     # Next Steps
     next_step: str | None = None
-    next_step_date: str | None = None
+    next_step_date: datetime | None = None
     next_step_last_updated_at: datetime | None = None
     current_solutions: str | None = None
     deal_source: str | None = None
@@ -1159,7 +1159,7 @@ class CallSummaryNextStep(ApolloModel):
 
     id: str | None = None
     step: str | None = None
-    due_at: str | None = None
+    due_at: datetime | None = None
     action_type: str | None = None
     task_id: str | None = None
     participant_id: str | None = None
@@ -1241,7 +1241,7 @@ class NewsArticle(BaseModel):
 
     title: str | None = None
     url: str | None = None
-    published_at: str | None = None
+    published_at: datetime | None = None
     category: str | None = None
     summary: str | None = None
 
@@ -1253,7 +1253,7 @@ class JobPosting(BaseModel):
     location: str | None = None
     department: str | None = None
     url: str | None = None
-    posted_at: str | None = None
+    posted_at: datetime | None = None
 
 
 # ============================================================================
