@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `EmploymentHistory.start_date`, `EmploymentHistory.end_date` now parsed as `date` (were `str`)
 - `CallSummaryNextStep.due_at` now parsed as `datetime` (was `str`)
 - `NewsArticle.published_at`, `JobPosting.posted_at` now parsed as `datetime` (were `str`)
+- `search_conversations()` default and max limit corrected from 100 to 25 (Apollo API caps at 25)
 
 ## [0.1.2] - 2026-02-23
 
