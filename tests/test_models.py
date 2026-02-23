@@ -40,8 +40,11 @@ from qodev_apollo_api.models import (
     EngagementData,
     EngagementGraphEntry,
     EngagementTypeCount,
+    LinkedInActionsTask,
     LinkedInConnectTask,
+    LinkedInInteractTask,
     LinkedInMessageTask,
+    LinkedInViewProfileTask,
     Note,
     OpportunityContactRole,
     OpportunityRoleEntry,
@@ -805,6 +808,24 @@ def test_resolve_task_account_action_item():
     assert isinstance(result, AccountActionItemTask)
 
 
+def test_resolve_task_linkedin_interact():
+    """Test resolve_task returns LinkedInInteractTask."""
+    result = resolve_task({"id": "1", "type": "linkedin_step_interact_post"})
+    assert isinstance(result, LinkedInInteractTask)
+
+
+def test_resolve_task_linkedin_view_profile():
+    """Test resolve_task returns LinkedInViewProfileTask."""
+    result = resolve_task({"id": "1", "type": "linkedin_step_view_profile"})
+    assert isinstance(result, LinkedInViewProfileTask)
+
+
+def test_resolve_task_linkedin_actions():
+    """Test resolve_task returns LinkedInActionsTask."""
+    result = resolve_task({"id": "1", "type": "linkedin_actions"})
+    assert isinstance(result, LinkedInActionsTask)
+
+
 def test_resolve_task_all_subtypes_are_task():
     """Test all resolve_task results are Task subclasses."""
     for task_type in TaskType:
@@ -816,6 +837,14 @@ def test_resolve_task_missing_type_falls_back():
     """Test resolve_task falls back to base Task when type is missing."""
     result = resolve_task({"id": "1", "status": "complete"})
     assert type(result) is Task
+
+
+def test_resolve_task_unknown_type_falls_back():
+    """Test resolve_task falls back to base Task for unknown future type values."""
+    result = resolve_task({"id": "1", "type": "some_future_task_type", "title": "Future"})
+    assert type(result) is Task
+    assert result.type is None
+    assert result.title == "Future"
 
 
 def test_task_with_full_emailer_message():

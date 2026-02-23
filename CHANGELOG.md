@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **11 typed Task subclasses** with native Pydantic `Discriminator("type")` — CallTask, AccountCallTask, ContactCallTask, LinkedInInteractTask, LinkedInViewProfileTask, LinkedInActionsTask, ContactActionItemTask, AccountActionItemTask (plus existing EmailTask, LinkedInConnectTask, LinkedInMessageTask)
+- `resolve_task()` function for polymorphic task deserialization with graceful fallback to base `Task` for unknown/missing types
+- `AnyTask` type alias — union of all task subclasses + base Task
+
 ## [0.1.1] - 2026-02-20
 
 ### Added
