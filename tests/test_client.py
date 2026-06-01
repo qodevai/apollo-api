@@ -1,5 +1,6 @@
 """Tests for Apollo client methods."""
 
+import json
 import os
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -1109,18 +1110,23 @@ async def test_search_people(client: ApolloClient):
 
 
 async def test_create_note(client: ApolloClient):
-    """Test POST /notes."""
-    client._client.request.return_value = _make_response({"note": {"id": "n1", "content": "Hello"}})
+    """create_note posts ProseMirror JSON in `content` (not plaintext in `note`)."""
+    client._client.request.return_value = _make_response({"note": {"id": "n1"}})
 
-    result = await client.create_note("Hello")
+    result = await client.create_note("Hello", title="Greeting")
 
-    assert result == {"note": {"id": "n1", "content": "Hello"}}
+    assert result == {"note": {"id": "n1"}}
 
     call_args = client._client.request.call_args
     assert call_args[0] == ("POST", "/notes")
     payload = call_args[1]["json"]
-    assert payload["note"] == "Hello"
+    assert "note" not in payload  # old (ignored) field must be gone
     assert "contact_ids" not in payload
+    doc = json.loads(payload["content"])
+    assert doc["type"] == "doc"
+    assert doc["content"][0]["type"] == "noteTitle"
+    assert doc["content"][0]["content"][0]["text"] == "Greeting"
+    assert doc["content"][1]["content"][0]["text"] == "Hello"
 
 
 async def test_create_note_with_associations(client: ApolloClient):
@@ -1135,10 +1141,19 @@ async def test_create_note_with_associations(client: ApolloClient):
     )
 
     payload = client._client.request.call_args[1]["json"]
-    assert payload["note"] == "Meeting notes"
+    assert "Meeting notes" in payload["content"]  # body serialised into ProseMirror
     assert payload["contact_ids"] == ["c1", "c2"]
     assert payload["account_ids"] == ["a1"]
     assert payload["opportunity_ids"] == ["o1"]
+
+
+async def test_delete_note(client: ApolloClient):
+    """delete_note issues DELETE /notes/{id}."""
+    client._client.request.return_value = _make_response({})
+
+    await client.delete_note("n1")
+
+    client._client.request.assert_called_once_with("DELETE", "/notes/n1")
 
 
 async def test_get_api_usage(client: ApolloClient):

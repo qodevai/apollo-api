@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `create_note()` posted `{"note": <plaintext>}`, which Apollo silently ignores — notes were created with empty content. It now serialises `content` to ProseMirror JSON and posts it in the `content` field (the format Apollo stores and `search_notes()` reads back). Closes #6.
+
+### Added
+- `markdown_to_prosemirror()` in `utils` — inverse of `prosemirror_to_markdown()` (title, paragraphs, bullet/ordered lists).
+- `create_note(..., title=...)` — optional note title (rendered as the ProseMirror `noteTitle`).
+- `ApolloClient.delete_note(note_id)` — `DELETE /notes/{id}`.
+
 ## [0.1.3] - 2026-02-23
 
 ### Added
