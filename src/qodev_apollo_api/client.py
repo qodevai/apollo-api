@@ -598,6 +598,7 @@ class ApolloClient:
         self,
         content: str,
         title: str | None = None,
+        *,
         contact_ids: list[str] | None = None,
         account_ids: list[str] | None = None,
         opportunity_ids: list[str] | None = None,
