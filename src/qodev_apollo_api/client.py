@@ -38,7 +38,7 @@ from .models import (
     TaskType,
     resolve_task,
 )
-from .utils import normalize_linkedin_url, prosemirror_to_markdown
+from .utils import markdown_to_prosemirror, normalize_linkedin_url, prosemirror_to_markdown
 
 
 class ApolloClient:
@@ -597,14 +597,23 @@ class ApolloClient:
     async def create_note(
         self,
         content: str,
+        title: str | None = None,
+        *,
         contact_ids: list[str] | None = None,
         account_ids: list[str] | None = None,
         opportunity_ids: list[str] | None = None,
     ) -> dict:
         """Create a note.
 
+        Apollo stores note bodies in the ``content`` field as ProseMirror JSON,
+        so the plain text / Markdown ``content`` is converted via
+        :func:`~qodev_apollo_api.utils.markdown_to_prosemirror` before posting.
+        (Posting ``{"note": <plaintext>}`` is silently ignored by Apollo and
+        produces an empty note.)
+
         Args:
-            content: Note content (plain text or Markdown)
+            content: Note body as plain text / Markdown.
+            title: Optional note title (rendered as the ProseMirror noteTitle).
             contact_ids: List of contact IDs to associate
             account_ids: List of account IDs to associate
             opportunity_ids: List of opportunity IDs to associate
@@ -612,7 +621,9 @@ class ApolloClient:
         Returns:
             Raw API response with created note data
         """
-        data: dict[str, str | list[str]] = {"note": content}
+        data: dict[str, str | list[str]] = {
+            "content": markdown_to_prosemirror(content, title=title)
+        }
         if contact_ids:
             data["contact_ids"] = contact_ids
         if account_ids:
@@ -621,6 +632,17 @@ class ApolloClient:
             data["opportunity_ids"] = opportunity_ids
 
         return await self._post("/notes", data)
+
+    async def delete_note(self, note_id: str) -> dict:
+        """Delete a note by ID.
+
+        Args:
+            note_id: Apollo note ID.
+
+        Returns:
+            Raw API response.
+        """
+        return await self._request("DELETE", f"/notes/{note_id}")
 
     # ========================================================================
     # ACTIVITIES

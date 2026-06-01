@@ -1,9 +1,12 @@
 """Utility functions for Apollo client.
 
-Includes ProseMirror JSON to Markdown conversion for notes.
+Includes ProseMirror JSON <-> Markdown conversion for notes.
 """
 
 import json
+import re
+
+_ORDERED_ITEM_RE = re.compile(r"^\d+\.\s+(.*)$")
 
 
 def prosemirror_to_markdown(content_json: str) -> tuple[str, str]:
@@ -101,6 +104,66 @@ def _extract_text_from_list_item(item: dict) -> str:
                 text_parts.append(text)
 
     return " ".join(text_parts)
+
+
+def markdown_to_prosemirror(content: str, title: str | None = None) -> str:
+    """Convert plain text / lightweight Markdown to a ProseMirror JSON string.
+
+    Apollo's ``POST /notes`` stores the note body in the ``content`` field as a
+    ProseMirror JSON string; this is the inverse of :func:`prosemirror_to_markdown`
+    for the node types Apollo notes use.
+
+    Supports:
+      * an optional note title (``noteTitle`` node)
+      * paragraphs (one per line; blank lines become empty paragraphs)
+      * bullet lists (lines starting with ``- `` or ``* ``)
+      * ordered lists (lines starting with ``1. ``)
+
+    Args:
+        content: Note body as plain text / Markdown.
+        title: Optional note title (rendered as the ProseMirror ``noteTitle``).
+
+    Returns:
+        ProseMirror document as a JSON string, ready to post to ``content``.
+    """
+    nodes: list[dict] = []
+    if title:
+        nodes.append({"type": "noteTitle", "content": [{"type": "text", "text": title}]})
+
+    def _paragraph(text: str) -> dict:
+        # Empty text nodes are invalid in ProseMirror — emit a bare paragraph.
+        if not text:
+            return {"type": "paragraph"}
+        return {"type": "paragraph", "content": [{"type": "text", "text": text}]}
+
+    def _list_item(text: str) -> dict:
+        return {"type": "listItem", "content": [_paragraph(text)]}
+
+    lines = (content or "").split("\n")
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+
+        if stripped[:2] in ("- ", "* "):
+            items = []
+            while i < len(lines) and lines[i].strip()[:2] in ("- ", "* "):
+                items.append(_list_item(lines[i].strip()[2:].strip()))
+                i += 1
+            nodes.append({"type": "bulletList", "content": items})
+            continue
+
+        if _ORDERED_ITEM_RE.match(stripped):
+            items = []
+            while i < len(lines) and (m := _ORDERED_ITEM_RE.match(lines[i].strip())):
+                items.append(_list_item(m.group(1).strip()))
+                i += 1
+            nodes.append({"type": "orderedList", "content": items})
+            continue
+
+        nodes.append(_paragraph(lines[i]))
+        i += 1
+
+    return json.dumps({"type": "doc", "content": nodes}, ensure_ascii=False)
 
 
 def normalize_linkedin_url(url: str) -> str:
