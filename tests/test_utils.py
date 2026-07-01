@@ -82,32 +82,38 @@ def test_prosemirror_empty_doc():
 
 
 def test_normalize_linkedin_url():
-    """Test LinkedIn URL normalization."""
-    # Test basic normalization
+    """Normalizes to Apollo's stored, exact-match form: http://www.linkedin.com/..."""
+    # https is rewritten to Apollo's http, and www is added
     assert (
         normalize_linkedin_url("https://linkedin.com/in/johndoe")
-        == "https://linkedin.com/in/johndoe"
+        == "http://www.linkedin.com/in/johndoe"
     )
 
-    # Test lowercase conversion
+    # Lowercase conversion
     assert (
         normalize_linkedin_url("HTTPS://LinkedIn.com/in/JohnDoe")
-        == "https://linkedin.com/in/johndoe"
+        == "http://www.linkedin.com/in/johndoe"
     )
 
-    # Test trailing slash removal
+    # Trailing slash removal
     assert (
         normalize_linkedin_url("https://linkedin.com/in/johndoe/")
-        == "https://linkedin.com/in/johndoe"
+        == "http://www.linkedin.com/in/johndoe"
     )
 
-    # Test protocol addition
-    assert normalize_linkedin_url("linkedin.com/in/johndoe") == "https://linkedin.com/in/johndoe"
+    # Protocol addition
+    assert normalize_linkedin_url("linkedin.com/in/johndoe") == "http://www.linkedin.com/in/johndoe"
 
-    # Test whitespace handling
+    # An already-www URL keeps a single www (no www.www)
+    assert (
+        normalize_linkedin_url("https://www.linkedin.com/in/johndoe")
+        == "http://www.linkedin.com/in/johndoe"
+    )
+
+    # Whitespace handling
     assert (
         normalize_linkedin_url("  https://linkedin.com/in/johndoe  ")
-        == "https://linkedin.com/in/johndoe"
+        == "http://www.linkedin.com/in/johndoe"
     )
 
 

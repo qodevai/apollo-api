@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-01
+
+### Fixed
+- `normalize_linkedin_url()` normalized to `https://` and never added `www`, but Apollo stores and **exact-matches** LinkedIn URLs as `http://www.linkedin.com/in/<slug>`. As a result `find_contact_by_linkedin_url()`'s URL tier always missed (silently falling through to name search), and any `search_contacts(linkedin_url=...)` filter built from it returned zero. It now produces Apollo's `http://www` form, so URL lookups actually match.
+
 ## [0.2.0] - 2026-06-02
 
 ### Fixed

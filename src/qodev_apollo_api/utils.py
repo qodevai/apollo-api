@@ -167,20 +167,25 @@ def markdown_to_prosemirror(content: str, title: str | None = None) -> str:
 
 
 def normalize_linkedin_url(url: str) -> str:
-    """Normalize LinkedIn URL for comparison.
+    """Normalize a LinkedIn URL to Apollo's stored, exact-match form.
+
+    Apollo stores and exact-matches LinkedIn URLs as ``http://www.linkedin.com/in/<slug>``
+    — **http** scheme (not https), ``www`` host, no trailing slash, lowercase. Producing
+    that exact form is what lets a ``linkedin_url`` search actually match; a ``https://``
+    or ``www``-less form silently returns zero results. It also doubles as a stable key for
+    comparing two URLs.
 
     Args:
-        url: LinkedIn profile URL
+        url: LinkedIn profile URL (any common shape).
 
     Returns:
-        Normalized URL (lowercase, stripped, trailing slash removed)
+        The URL as ``http://www.linkedin.com/...`` (or ``""`` for a falsy input).
     """
     if not url:
         return ""
     url = url.lower().strip().rstrip("/")
-    # Normalize scheme to https://
-    if url.startswith("http://"):
-        url = "https://" + url[7:]
-    elif not url.startswith("https://"):
-        url = f"https://{url}"
-    return url
+    # Rebuild to Apollo's stored form: strip the scheme, force the www host, force http.
+    url = re.sub(r"^https?://", "", url)
+    if url.startswith("linkedin.com/"):
+        url = "www." + url
+    return f"http://{url}"
