@@ -60,6 +60,7 @@ from qodev_apollo_api.models import (
     PhoneEntry,
     Pipeline,
     Stage,
+    TaskStatus,
     TaskType,
     Technology,
     TranscriptSegment,
@@ -888,6 +889,22 @@ def test_resolve_task_unknown_type_falls_back_to_other_task():
     assert result.type == TaskType.OTHER
     assert result.original_type == "some_future_task_type"
     assert result.id == "1"
+
+
+def test_resolve_task_preserves_unmodelled_status():
+    """A status Apollo returns but the library doesn't model (skipped/archived/…) must
+    deserialize as the raw string rather than raise — otherwise a single such task sinks a
+    whole tasks/search page (it fails the union AND the OtherTask fallback)."""
+    result = resolve_task({"id": "1", "type": "linkedin_step_connect", "status": "skipped"})
+    assert result.status == "skipped"
+    # comparison against the known-value enum still works via StrEnum equality
+    assert result.status != TaskStatus.SCHEDULED
+
+
+def test_resolve_task_preserves_unmodelled_priority():
+    """Same guarantee for priority (values outside high/medium/low)."""
+    result = resolve_task({"id": "1", "type": "linkedin_step_connect", "priority": "none"})
+    assert result.priority == "none"
 
 
 def test_task_with_full_emailer_message():

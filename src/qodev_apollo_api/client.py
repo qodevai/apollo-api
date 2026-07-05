@@ -3,12 +3,14 @@
 Type-safe async wrapper for Apollo.io API.
 """
 
+import logging
 import os
 from datetime import datetime
 from types import TracebackType
 from typing import Any
 
 import httpx
+from pydantic import ValidationError
 
 from .exceptions import APIError, AuthenticationError, RateLimitError
 from .models import (
@@ -39,6 +41,8 @@ from .models import (
     resolve_task,
 )
 from .utils import markdown_to_prosemirror, normalize_linkedin_url, prosemirror_to_markdown
+
+logger = logging.getLogger(__name__)
 
 
 class ApolloClient:
@@ -709,7 +713,14 @@ class ApolloClient:
             data["multi_sort"] = [{field: {"order": order}} for field, order in sort]
         result = await self._post("/tasks/search", data)
 
-        tasks = [resolve_task(t) for t in result.get("tasks", [])]
+        tasks: list[Task] = []
+        for raw in result.get("tasks", []):
+            try:
+                tasks.append(resolve_task(raw))
+            except ValidationError:
+                # A single structurally-invalid row (e.g. missing id) must not sink the whole
+                # page — skip it so the rest of the results stay usable.
+                logger.warning("Skipping unparseable task id=%s", raw.get("id"), exc_info=True)
         pagination = result.get("pagination", {})
 
         return PaginatedResponse[Task](

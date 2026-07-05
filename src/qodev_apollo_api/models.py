@@ -823,8 +823,14 @@ class BaseTask(ApolloModel):
     title: str | None = None
     subject: str | None = None
     type: TaskType | None = None
-    priority: TaskPriority | None = None
-    status: TaskStatus | None = None
+    # Kept as raw strings, not the TaskStatus/TaskPriority enums: Apollo returns values the
+    # library doesn't model (status: skipped/archived/…; priority occasionally outside
+    # high/medium/low). A strict enum here broke deserialization — a task with e.g.
+    # status="skipped" failed the discriminated union AND resolve_task's OtherTask fallback
+    # (which inherits these fields), so a single such row raised for the *whole* search page.
+    # Compare against TaskStatus.* / TaskPriority.* — StrEnum equality still holds.
+    priority: str | None = None
+    status: str | None = None
     due_at: datetime | None = None
     note: str | None = None
     answered: bool | None = None
