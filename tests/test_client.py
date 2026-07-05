@@ -305,6 +305,38 @@ async def test_search_tasks(client: ApolloClient):
     assert client._client.request.call_args[0] == ("POST", "/tasks/search")
 
 
+async def test_search_tasks_returns_task_with_unmodelled_status(client: ApolloClient):
+    """Regression: a task whose status Apollo returns but the library doesn't model
+    (skipped/archived/…) is returned with the raw status — not dropped, not raised. This
+    is what broke the LinkedIn connect batch: a single skipped task sank the whole page."""
+    client._client.request.return_value = _make_response(
+        {
+            "tasks": [{"id": "t1", "type": "linkedin_step_connect", "status": "skipped"}],
+            "pagination": {"total_entries": 1},
+        }
+    )
+
+    result = await client.search_tasks()
+
+    assert len(result.items) == 1
+    assert result.items[0].status == "skipped"
+
+
+async def test_search_tasks_skips_unparseable_row(client: ApolloClient):
+    """A structurally-invalid row (missing id) is skipped, not fatal — the rest of the page
+    is still returned."""
+    client._client.request.return_value = _make_response(
+        {
+            "tasks": [{"type": "call"}, {"id": "t2", "type": "call"}],
+            "pagination": {"total_entries": 2},
+        }
+    )
+
+    result = await client.search_tasks()
+
+    assert [t.id for t in result.items] == ["t2"]
+
+
 async def test_search_tasks_with_sort(client: ApolloClient):
     """Test search_tasks with sort parameter generates multi_sort payload."""
     client._client.request.return_value = _make_response(
