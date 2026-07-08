@@ -33,6 +33,7 @@ from .models import (
     OpportunityContactRoleType,
     PaginatedResponse,
     Pipeline,
+    RoleAssignment,
     SortOrder,
     Stage,
     Task,
@@ -521,7 +522,9 @@ class ApolloClient:
             page=1,
         )
 
-    async def update_opportunity_roles(self, opportunity_id: str, roles: list[dict]) -> Deal:
+    async def update_opportunity_roles(
+        self, opportunity_id: str, roles: list[RoleAssignment]
+    ) -> Deal:
         """Set the contact roles on a deal/opportunity (undocumented endpoint).
 
         This **replaces** the full set of contact roles on the opportunity, so

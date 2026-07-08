@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated, Any, Generic, Literal, TypeAlias, TypeVar
+from typing import Annotated, Any, Generic, Literal, NotRequired, TypeAlias, TypedDict, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Discriminator, Field, TypeAdapter, ValidationError
 
@@ -181,6 +181,18 @@ class OpportunityContactRole(ApolloModel):
     role: list[OpportunityRoleEntry] = Field(default_factory=list)
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class RoleAssignment(TypedDict):
+    """A single contact-role entry accepted by ``update_opportunity_roles``.
+
+    ``contact_id`` is required; ``opportunity_contact_role_type_id`` and
+    ``is_primary`` are optional.
+    """
+
+    contact_id: str
+    opportunity_contact_role_type_id: NotRequired[str | None]
+    is_primary: NotRequired[bool]
 
 
 class OpportunityContactRoleType(ApolloModel):
