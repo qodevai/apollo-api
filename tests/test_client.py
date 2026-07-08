@@ -338,6 +338,29 @@ async def test_search_tasks_skips_unparseable_row(client: ApolloClient):
     assert [t.id for t in result.items] == ["t2"]
 
 
+async def test_search_tasks_skips_non_dict_row(client: ApolloClient):
+    """A non-dict row (e.g. a stray null) is skipped without raising AttributeError."""
+    client._client.request.return_value = _make_response(
+        {
+            "tasks": [None, "oops", {"id": "t2", "type": "call"}],
+            "pagination": {"total_entries": 3},
+        }
+    )
+
+    result = await client.search_tasks()
+
+    assert [t.id for t in result.items] == ["t2"]
+
+
+async def test_search_tasks_null_tasks_key(client: ApolloClient):
+    """A null `tasks` value doesn't crash iteration."""
+    client._client.request.return_value = _make_response({"tasks": None, "pagination": {}})
+
+    result = await client.search_tasks()
+
+    assert result.items == []
+
+
 async def test_search_tasks_with_sort(client: ApolloClient):
     """Test search_tasks with sort parameter generates multi_sort payload."""
     client._client.request.return_value = _make_response(

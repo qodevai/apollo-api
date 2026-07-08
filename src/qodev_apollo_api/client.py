@@ -759,7 +759,12 @@ class ApolloClient:
         result = await self._post("/tasks/search", data)
 
         tasks: list[Task] = []
-        for raw in result.get("tasks", []):
+        for raw in result.get("tasks") or []:
+            if not isinstance(raw, dict):
+                # A non-dict row (e.g. a stray null) would make resolve_task raise
+                # AttributeError, not ValidationError — skip it before we get there.
+                logger.warning("Skipping non-dict task row: %r", raw)
+                continue
             try:
                 tasks.append(resolve_task(raw))
             except ValidationError:
