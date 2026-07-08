@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-08
+
+### Added
+
+- `ApolloClient.update_opportunity_roles(opportunity_id, roles)` — `POST /opportunities/update_roles`. Sets the contact roles on a deal (replaces the full set; read the current roles from `get_deal(...).opportunity_contact_roles` and modify). Returns the updated `Deal`. Surfaces the previously curl-only role-management endpoint.
+- `ApolloClient.list_custom_fields()` — `GET /typed_custom_fields`. Returns the account/contact/opportunity custom field definitions as a new `CustomField` model (`id`, `modality`, `name`, `type`, `picklist_options`, `mapped_crm_field`).
+- `CustomField` model, exported from the package root.
+
 ## [0.2.1] - 2026-07-01
 
 ### Fixed

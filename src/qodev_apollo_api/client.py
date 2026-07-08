@@ -22,6 +22,7 @@ from .models import (
     ContactDetail,
     Conversation,
     ConversationDetail,
+    CustomField,
     Deal,
     Email,
     EmailerMessage,
@@ -519,6 +520,47 @@ class ApolloClient:
             total=len(role_types),
             page=1,
         )
+
+    async def update_opportunity_roles(self, opportunity_id: str, roles: list[dict]) -> Deal:
+        """Set the contact roles on a deal/opportunity (undocumented endpoint).
+
+        This **replaces** the full set of contact roles on the opportunity, so
+        callers should pass the complete desired set (read the current roles from
+        ``get_deal(...).opportunity_contact_roles`` and modify them). Each entry is
+        a dict with ``contact_id`` and, optionally, ``opportunity_contact_role_type_id``
+        and ``is_primary``::
+
+            roles = [
+                {"contact_id": "abc", "opportunity_contact_role_type_id": "t1", "is_primary": True},
+                {"contact_id": "def", "is_primary": False},
+            ]
+
+        Args:
+            opportunity_id: The opportunity/deal ID.
+            roles: The complete list of contact-role entries to set.
+
+        Returns:
+            The updated Deal.
+        """
+        data = {"opportunity_id": opportunity_id, "roles": roles}
+        result = await self._post("/opportunities/update_roles", data)
+        return Deal.model_validate(result.get("opportunity", result))
+
+    # ========================================================================
+    # CUSTOM FIELDS
+    # ========================================================================
+
+    async def list_custom_fields(self) -> list[CustomField]:
+        """List all typed custom field definitions (undocumented endpoint).
+
+        Returns definitions for custom fields across every modality (contact,
+        account, opportunity). Use ``modality`` to filter client-side.
+
+        Returns:
+            List of CustomField definitions.
+        """
+        result = await self._get("/typed_custom_fields")
+        return [CustomField.model_validate(f) for f in result.get("typed_custom_fields", [])]
 
     # ========================================================================
     # ENRICHMENT
