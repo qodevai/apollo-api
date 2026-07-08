@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-07-08
+
+### Fixed
+
+- `search_tasks()` could raise `AttributeError` while *handling* an unparseable row: the skip path called `raw.get("id")` assuming `raw` was a dict, so a non-dict row (e.g. a stray `null`) turned the intended "skip one bad row" into a whole-page crash. The id lookup is now guarded (`isinstance(raw, dict)`), and iteration tolerates a null `tasks` value (`result.get("tasks") or []`).
+
 ## [0.3.1] - 2026-07-08
 
 ### Changed

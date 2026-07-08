@@ -899,6 +899,9 @@ def test_resolve_task_preserves_unmodelled_status():
     assert result.status == "skipped"
     # comparison against the known-value enum still works via StrEnum equality
     assert result.status != TaskStatus.SCHEDULED
+    # ...and a modelled status still compares equal to its enum member
+    scheduled = resolve_task({"id": "2", "type": "linkedin_step_connect", "status": "scheduled"})
+    assert scheduled.status == TaskStatus.SCHEDULED
 
 
 def test_resolve_task_preserves_unmodelled_priority():
