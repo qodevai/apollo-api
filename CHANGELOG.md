@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-08
+
+### Changed
+
+- `update_opportunity_roles(...)` now types its `roles` parameter as `list[RoleAssignment]` (a `TypedDict` with a required `contact_id` and optional `opportunity_contact_role_type_id` / `is_primary`) instead of the loose `list[dict]`, giving callers type checking and autocomplete. `RoleAssignment` is exported from the package root. Non-breaking — plain dicts still satisfy it structurally.
+
 ## [0.3.0] - 2026-07-08
 
 ### Added
