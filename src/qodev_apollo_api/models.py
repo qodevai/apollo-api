@@ -640,6 +640,21 @@ class Stage(ApolloModel):
     team_id: str | None = None
 
 
+class CustomField(ApolloModel):
+    """A typed custom field definition (from GET /typed_custom_fields).
+
+    ``modality`` is the entity the field belongs to (e.g. "contact", "account",
+    "opportunity"); ``type`` is the value type (e.g. "text", "date", "picklist").
+    """
+
+    id: str
+    modality: str | None = None
+    name: str | None = None
+    type: str | None = None
+    picklist_options: list[str] = Field(default_factory=list)
+    mapped_crm_field: str | None = None
+
+
 # ============================================================================
 # ACTIVITY MODELS
 # ============================================================================

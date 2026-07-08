@@ -21,6 +21,7 @@ from qodev_apollo_api.models import (
     ContactDetail,
     Conversation,
     ConversationDetail,
+    CustomField,
     Deal,
     Email,
     EmailerMessage,
@@ -616,6 +617,53 @@ async def test_list_opportunity_contact_role_types(client: ApolloClient):
     call_args = client._client.request.call_args
     assert call_args[0] == ("POST", "/opportunity_contact_role_types/search")
     assert call_args[1]["json"] == {}
+
+
+async def test_update_opportunity_roles(client: ApolloClient):
+    """Test POST /opportunities/update_roles returns the updated Deal with the roles body."""
+    client._client.request.return_value = _make_response(
+        {"opportunity": {"id": "d1", "name": "Big Deal"}}
+    )
+
+    roles = [
+        {"contact_id": "c1", "opportunity_contact_role_type_id": "rt1", "is_primary": True},
+        {"contact_id": "c2", "is_primary": False},
+    ]
+    result = await client.update_opportunity_roles("d1", roles)
+
+    assert isinstance(result, Deal)
+    assert result.id == "d1"
+
+    call_args = client._client.request.call_args
+    assert call_args[0] == ("POST", "/opportunities/update_roles")
+    assert call_args[1]["json"] == {"opportunity_id": "d1", "roles": roles}
+
+
+async def test_list_custom_fields(client: ApolloClient):
+    """Test GET /typed_custom_fields returns list[CustomField]."""
+    client._client.request.return_value = _make_response(
+        {
+            "typed_custom_fields": [
+                {"id": "f1", "modality": "contact", "name": "First Message", "type": "date"},
+                {
+                    "id": "f2",
+                    "modality": "opportunity",
+                    "name": "Region",
+                    "type": "picklist",
+                    "picklist_options": ["EU", "US"],
+                },
+            ]
+        }
+    )
+
+    result = await client.list_custom_fields()
+
+    assert len(result) == 2
+    assert all(isinstance(f, CustomField) for f in result)
+    assert result[0].name == "First Message"
+    assert result[1].picklist_options == ["EU", "US"]
+
+    assert client._client.request.call_args[0] == ("GET", "/typed_custom_fields")
 
 
 async def test_get_contact_stages(client: ApolloClient):
