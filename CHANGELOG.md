@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-09
+
+### Added
+
+- `create_deal(name, **fields)` creates a deal/opportunity via `POST /opportunities`. `name` is the only required field; optional `owner_id`, `account_id`, `amount`, `opportunity_stage_id`, `closed_date` are forwarded as-is. Requires a **master** API key (non-master keys return 403). Live-verified against the real API.
+
+### Fixed
+
+- `update_opportunity_roles(...)` now sends Apollo's expected **nested** role shape — `{"contact_id": …, "is_primary": …, "role": [{"opportunity_contact_role_type_id": …, "is_primary": …}]}` — instead of the flat `opportunity_contact_role_type_id` on the entry. The flat shape made Apollo 422 with `undefined method 'map' for nil`, so setting a contact's role on a deal failed every time. The public `RoleAssignment` interface is unchanged (callers still pass flat entries).
+- `search_accounts(**filters)` now validates filter keys against an allowlist (`q_organization_name`, `account_stage_ids`, `account_label_ids`, `sort_by_field`, `sort_ascending`) and raises `ValueError` on unknown keys. Apollo silently ignores unrecognised keys and returns an unfiltered default page that looks like a real match (e.g. `query="…"` returned ~28k accounts, "Google" first) — fail-loud now prevents wrong-account attribution.
+
 ## [0.3.2] - 2026-07-08
 
 ### Fixed
