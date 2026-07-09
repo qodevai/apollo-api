@@ -46,6 +46,20 @@ from .utils import markdown_to_prosemirror, normalize_linkedin_url, prosemirror_
 
 logger = logging.getLogger(__name__)
 
+# Filters accepted by POST /accounts/search (besides page/per_page, which are
+# passed explicitly). Apollo *silently drops* unrecognised keys and returns an
+# unfiltered default page, so we validate against this allowlist and raise
+# instead of returning wrong data. See ``ApolloClient.search_accounts``.
+ACCOUNT_SEARCH_FILTERS = frozenset(
+    {
+        "q_organization_name",
+        "account_stage_ids",
+        "account_label_ids",
+        "sort_by_field",
+        "sort_ascending",
+    }
+)
+
 
 class ApolloClient:
     """Async Apollo.io API client with context manager support."""
@@ -350,11 +364,32 @@ class ApolloClient:
         Args:
             page: Page number (default 1)
             limit: Results per page (default 100, max 100)
-            **filters: Additional filters (q_organization_name, account_stage_ids, etc.)
+            **filters: Search filters. Must be keys Apollo actually supports
+                (see ``ACCOUNT_SEARCH_FILTERS``): ``q_organization_name``,
+                ``account_stage_ids``, ``account_label_ids``, ``sort_by_field``,
+                ``sort_ascending``.
 
         Returns:
             Paginated response with Account items
+
+        Raises:
+            ValueError: If an unrecognised filter key is passed. Apollo silently
+                ignores unknown keys and returns an unfiltered default page (which
+                looks like a real match), so we fail loudly instead of returning the
+                wrong accounts. Note ``query=`` is **not** a valid filter — use
+                ``q_organization_name=`` to search by name.
         """
+        unknown = set(filters) - ACCOUNT_SEARCH_FILTERS
+        if unknown:
+            raise ValueError(
+                "Unknown account search filter(s): "
+                + ", ".join(sorted(unknown))
+                + ". Apollo silently ignores unrecognised keys and returns an unfiltered "
+                "default page. Supported filters: "
+                + ", ".join(sorted(ACCOUNT_SEARCH_FILTERS))
+                + " (to search by name use q_organization_name=)."
+            )
+
         data = {"page": page, "per_page": min(limit, 100), **filters}
         result = await self._post("/accounts/search", data)
 
