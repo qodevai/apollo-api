@@ -552,7 +552,10 @@ class ApolloClient:
         # into the wire format the server actually accepts.
         wire_roles: list[dict] = []
         for entry in roles:
-            is_primary = bool(entry.get("is_primary"))
+            # RoleAssignment types is_primary as a bool; default to False when omitted.
+            # Avoid bool(...) coercion, which would turn a stray truthy non-bool (e.g.
+            # the string "false") into True.
+            is_primary = entry.get("is_primary", False)
             role_obj: dict[str, Any] = {"is_primary": is_primary}
             role_type_id = entry.get("opportunity_contact_role_type_id")
             if role_type_id:
