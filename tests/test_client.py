@@ -572,6 +572,43 @@ async def test_get_deal(client: ApolloClient):
     client._client.request.assert_called_once_with("GET", "/opportunities/d1")
 
 
+async def test_create_deal(client: ApolloClient):
+    """Test POST /opportunities returns the created Deal with name + extra fields in the body."""
+    client._client.request.return_value = _make_response(
+        {"opportunity": {"id": "d9", "name": "New Deal", "amount": "1000"}}
+    )
+
+    result = await client.create_deal(
+        "New Deal", owner_id="o1", account_id="a1", amount=1000, opportunity_stage_id="st1"
+    )
+
+    assert isinstance(result, Deal)
+    assert result.id == "d9"
+
+    call_args = client._client.request.call_args
+    assert call_args[0] == ("POST", "/opportunities")
+    assert call_args[1]["json"] == {
+        "name": "New Deal",
+        "owner_id": "o1",
+        "account_id": "a1",
+        "amount": 1000,
+        "opportunity_stage_id": "st1",
+    }
+
+
+async def test_create_deal_name_only(client: ApolloClient):
+    """Only ``name`` is required; the body carries nothing else."""
+    client._client.request.return_value = _make_response(
+        {"opportunity": {"id": "d10", "name": "Minimal"}}
+    )
+
+    result = await client.create_deal("Minimal")
+
+    assert isinstance(result, Deal)
+    assert result.id == "d10"
+    assert client._client.request.call_args[1]["json"] == {"name": "Minimal"}
+
+
 async def test_get_pipeline(client: ApolloClient):
     """Test GET /opportunity_pipelines/{id} returns Pipeline."""
     client._client.request.return_value = _make_response(
