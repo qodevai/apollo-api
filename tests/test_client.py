@@ -251,6 +251,45 @@ async def test_search_accounts(client: ApolloClient):
     assert result.items[0].name == "Acme Corp"
 
 
+async def test_search_accounts_rejects_unknown_filter(client: ApolloClient):
+    """An unrecognised filter raises instead of returning a wrong default page.
+
+    Regression: Apollo silently drops unknown keys (e.g. ``query=``) and returns
+    an unfiltered default list that looks like a real match.
+    """
+    with pytest.raises(ValueError, match="Unknown account search filter"):
+        await client.search_accounts(query="Red and Bundle")
+
+    # The bad request must never reach Apollo.
+    client._client.request.assert_not_called()
+
+
+async def test_search_accounts_error_names_the_bad_key_and_suggests_fix(client: ApolloClient):
+    """The message names the offending key and points to q_organization_name."""
+    with pytest.raises(ValueError, match=r"query.*q_organization_name"):
+        await client.search_accounts(query="x")
+
+
+async def test_search_accounts_allows_documented_filters(client: ApolloClient):
+    """All allowlisted keys pass validation and reach the request body."""
+    client._client.request.return_value = _make_response(
+        {"accounts": [], "pagination": {"total_entries": 0}}
+    )
+
+    await client.search_accounts(
+        q_organization_name="Acme",
+        account_stage_ids=["s1"],
+        account_label_ids=["l1"],
+        sort_by_field="account_created_at",
+        sort_ascending=True,
+    )
+
+    body = client._client.request.call_args[1]["json"]
+    assert body["q_organization_name"] == "Acme"
+    assert body["account_stage_ids"] == ["s1"]
+    assert body["sort_by_field"] == "account_created_at"
+
+
 async def test_search_deals(client: ApolloClient):
     """Test POST /opportunities/search returns PaginatedResponse[Deal]."""
     client._client.request.return_value = _make_response(
