@@ -545,7 +545,23 @@ class ApolloClient:
         Returns:
             The updated Deal.
         """
-        data = {"opportunity_id": opportunity_id, "roles": roles}
+        # Apollo's endpoint expects each entry's role type *nested* under a ``role``
+        # array — sending ``opportunity_contact_role_type_id`` flat on the entry (with
+        # no ``role`` key) makes the server call ``.map`` on nil and 422 with
+        # "undefined method 'map' for nil". Reshape the flat RoleAssignment entries
+        # into the wire format the server actually accepts.
+        wire_roles: list[dict] = []
+        for entry in roles:
+            is_primary = bool(entry.get("is_primary"))
+            role_obj: dict[str, Any] = {"is_primary": is_primary}
+            role_type_id = entry.get("opportunity_contact_role_type_id")
+            if role_type_id:
+                role_obj["opportunity_contact_role_type_id"] = role_type_id
+            wire_roles.append(
+                {"contact_id": entry["contact_id"], "is_primary": is_primary, "role": [role_obj]}
+            )
+
+        data = {"opportunity_id": opportunity_id, "roles": wire_roles}
         result = await self._post("/opportunities/update_roles", data)
         return Deal.model_validate(result.get("opportunity", result))
 

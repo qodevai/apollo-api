@@ -643,7 +643,11 @@ async def test_list_opportunity_contact_role_types(client: ApolloClient):
 
 
 async def test_update_opportunity_roles(client: ApolloClient):
-    """Test POST /opportunities/update_roles returns the updated Deal with the roles body."""
+    """The flat RoleAssignment entries are reshaped into Apollo's nested ``role`` wire format.
+
+    Regression: sending ``opportunity_contact_role_type_id`` flat on the entry (no
+    ``role`` key) makes Apollo 422 with "undefined method 'map' for nil".
+    """
     client._client.request.return_value = _make_response(
         {"opportunity": {"id": "d1", "name": "Big Deal"}}
     )
@@ -659,7 +663,19 @@ async def test_update_opportunity_roles(client: ApolloClient):
 
     call_args = client._client.request.call_args
     assert call_args[0] == ("POST", "/opportunities/update_roles")
-    assert call_args[1]["json"] == {"opportunity_id": "d1", "roles": roles}
+    assert call_args[1]["json"] == {
+        "opportunity_id": "d1",
+        "roles": [
+            {
+                "contact_id": "c1",
+                "is_primary": True,
+                "role": [{"is_primary": True, "opportunity_contact_role_type_id": "rt1"}],
+            },
+            # No role type → the nested role object carries only is_primary (never a
+            # flat/absent role type, which is what triggered the nil.map crash).
+            {"contact_id": "c2", "is_primary": False, "role": [{"is_primary": False}]},
+        ],
+    }
 
 
 async def test_list_custom_fields(client: ApolloClient):
