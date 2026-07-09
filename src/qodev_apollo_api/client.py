@@ -420,6 +420,25 @@ class ApolloClient:
         result = await self._get(f"/opportunities/{deal_id}")
         return Deal.model_validate(result.get("opportunity", {}))
 
+    async def create_deal(self, name: str, **fields) -> Deal:
+        """Create a new deal/opportunity.
+
+        Note:
+            Apollo requires a **master** API key for this endpoint; a non-master
+            key returns 403. ``name`` is the only required field.
+
+        Args:
+            name: Human-readable deal name (required).
+            **fields: Additional fields (owner_id, account_id, amount,
+                opportunity_stage_id, closed_date [YYYY-MM-DD], etc.).
+
+        Returns:
+            The created Deal model.
+        """
+        data = {"name": name, **fields}
+        result = await self._post("/opportunities", data)
+        return Deal.model_validate(result.get("opportunity", result))
+
     # ========================================================================
     # PIPELINES & STAGES
     # ========================================================================
