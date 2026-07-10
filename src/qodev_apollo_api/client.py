@@ -83,7 +83,10 @@ CONTACT_SEARCH_FILTERS = frozenset(
 )
 DEAL_SEARCH_FILTERS = frozenset(
     {
-        "q_keywords",
+        # Deal *name* search is q_opportunity_name — NOT q_keywords, which Apollo
+        # silently ignores for /opportunities/search (verified: a nonsense keyword
+        # still returned every deal).
+        "q_opportunity_name",
         "opportunity_stage_ids",
         "sort_by_field",
         "sort_ascending",
@@ -290,7 +293,18 @@ class ApolloClient:
         Args:
             page: Page number (default 1)
             limit: Results per page (default 100, max 100)
-            **filters: Additional filters (q_keywords, contact_stage_ids, linkedin_url, etc.)
+            **filters: Contact search filters (see ``CONTACT_SEARCH_FILTERS``):
+
+                - ``q_keywords`` (str): free-text over name / title / company / email.
+                - ``contact_stage_ids`` (list[str]): stage IDs (see ``get_contact_stages``).
+                - ``contact_label_ids`` (list[str]): label / list IDs.
+                - ``linkedin_url`` (str): must be Apollo's **canonical** form —
+                  ``http://www.linkedin.com/in/<slug>`` (http, lowercased,
+                  url-encoded). A near-miss silently matches nothing.
+                - ``sort_by_field`` (str): ``contact_last_activity_date`` |
+                  ``contact_email_last_opened_at`` | ``contact_email_last_clicked_at`` |
+                  ``contact_created_at`` | ``contact_updated_at``.
+                - ``sort_ascending`` (bool).
 
         Returns:
             Paginated response with Contact items
@@ -448,10 +462,14 @@ class ApolloClient:
         Args:
             page: Page number (default 1)
             limit: Results per page (default 100, max 100)
-            **filters: Search filters. Must be keys Apollo actually supports
-                (see ``ACCOUNT_SEARCH_FILTERS``): ``q_organization_name``,
-                ``account_stage_ids``, ``account_label_ids``, ``sort_by_field``,
-                ``sort_ascending``.
+            **filters: Account search filters (see ``ACCOUNT_SEARCH_FILTERS``):
+
+                - ``q_organization_name`` (str): company-name keyword.
+                - ``account_stage_ids`` (list[str]): account stage IDs.
+                - ``account_label_ids`` (list[str]): label / list IDs.
+                - ``sort_by_field`` (str): ``account_last_activity_date`` |
+                  ``account_created_at`` | ``account_updated_at``.
+                - ``sort_ascending`` (bool).
 
         Returns:
             Paginated response with Account items
@@ -500,7 +518,15 @@ class ApolloClient:
         Args:
             page: Page number (default 1)
             limit: Results per page (default 100, max 100)
-            **filters: Additional filters (opportunity_stage_ids, q_keywords, etc.)
+            **filters: Deal search filters (see ``DEAL_SEARCH_FILTERS``):
+
+                - ``q_opportunity_name`` (str): deal-name keyword. **Use this, not
+                  ``q_keywords``** — Apollo silently ignores ``q_keywords`` on
+                  ``/opportunities/search`` (it returns every deal).
+                - ``opportunity_stage_ids`` (list[str]): deal stage IDs (see
+                  ``list_all_stages``).
+                - ``sort_by_field`` (str): ``amount`` | ``is_closed`` | ``is_won``.
+                - ``sort_ascending`` (bool).
 
         Returns:
             Paginated response with Deal items
@@ -755,8 +781,40 @@ class ApolloClient:
         require a separate enrichment/reveal step and consume credits).
 
         Args:
-            **filters: Search filters (q_keywords, person_titles, person_seniorities,
-                person_locations, q_organization_domains_list, etc.).
+            **filters: People search filters (see ``PEOPLE_SEARCH_FILTERS``).
+                Formats matter — a wrong format is silently ignored or matches
+                nothing rather than erroring:
+
+                - ``q_keywords`` (str): free text.
+                - ``person_titles`` (list[str]): job titles, e.g. ``["CEO", "VP Sales"]``.
+                  ``include_similar_titles`` (bool): broaden to related titles.
+                - ``person_seniorities`` (list[str]): **lowercase enums** —
+                  ``owner, founder, c_suite, partner, vp, head, director, manager,
+                  senior, entry, intern``. Uppercase / free text (``"VP"``,
+                  ``"vice president"``) match **0** rows.
+                - ``person_locations`` / ``organization_locations`` (list[str]):
+                  person / company location. Accepts a country name, a 2-letter
+                  country code (``"US"`` == ``"United States"``), or
+                  ``"City, State, Country"``.
+                - ``organization_num_employees_ranges`` (list[str]): company-size
+                  buckets as **"min,max"** strings, e.g. ``["1,10"]``,
+                  ``["1000,5000"]``. A dash (``"1-10"``) is **silently ignored**.
+                - ``q_organization_domains_list`` (list[str]): company domains,
+                  e.g. ``["acme.com"]``. ``organization_ids`` (list[str]): Apollo org IDs.
+                - ``contact_email_status`` (list[str]): ``verified``, ``unverified``,
+                  ``likely to engage``, ``unavailable``.
+                - ``revenue_range`` / ``organization_num_jobs_range`` (dict):
+                  ``{"min": int, "max": int}``.
+                - ``organization_job_posted_at_range`` (dict): ``{"min": "YYYY-MM-DD",
+                  "max": "YYYY-MM-DD"}``.
+                - ``currently_using_any_of_technology_uids`` /
+                  ``currently_using_all_of_technology_uids`` /
+                  ``currently_not_using_any_of_technology_uids`` (list[str]): tech
+                  UIDs, e.g. ``["salesforce"]``.
+                - ``q_organization_job_titles`` (list[str]),
+                  ``organization_job_locations`` (list[str]).
+                - ``page`` / ``per_page`` (int): pagination (this method has no
+                  explicit page/limit args — pass them as filters).
 
         Returns:
             Raw Apollo response dict: ``people`` (list) and ``total_entries`` (int).
