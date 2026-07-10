@@ -373,21 +373,27 @@ class ApolloClient:
         create_if_missing: bool = False,
         contact_stage_id: str | None = None,
     ) -> str | None:
-        """Find contact using 3-tier fallback strategy.
+        """Find an existing contact by LinkedIn URL (2-tier lookup).
 
         Strategy:
-        1. Search by LinkedIn URL (exact match)
-        2. Fallback to name search (if unique match)
-        3. People database search for auto-creation (if enabled)
+        1. Search existing contacts by LinkedIn URL (exact match).
+        2. Fall back to a name search among existing contacts (unique match whose
+           normalized URL equals the target).
+
+        Auto-creation from Apollo's people database (the former Step 3) is no
+        longer possible: ``/mixed_people/api_search`` returns teaser data only
+        (no ``linkedin_url``, an obfuscated last name, no email), so a URL match
+        can never succeed and there isn't enough data to create a usable contact.
 
         Args:
             linkedin_url: LinkedIn profile URL
-            person_name: Person's full name (for fallback search)
-            create_if_missing: Auto-create from people database if not found
-            contact_stage_id: Stage ID to assign when creating
+            person_name: Person's full name (for the fallback search)
+            create_if_missing: Deprecated no-op — retained for backwards
+                compatibility. Logs a warning when set; never creates a contact.
+            contact_stage_id: Deprecated no-op (was only used for auto-creation).
 
         Returns:
-            Contact ID if found/created, None otherwise
+            Contact ID if found, None otherwise.
         """
         normalized_url = normalize_linkedin_url(linkedin_url)
 
@@ -416,33 +422,17 @@ class ApolloClient:
                 # Ambiguous - multiple contacts with same name and URL
                 return None
 
-        # Step 3: People database search for auto-creation
+        # Auto-creation from the people database is no longer possible — Apollo's
+        # /mixed_people/api_search returns teaser data (no linkedin_url, obfuscated
+        # last name, no email), so a URL match can't be made nor a usable contact
+        # created. Warn instead of silently doing nothing.
         if create_if_missing and person_name:
-            people_result = await self._post(
-                "/mixed_people/search",
-                {
-                    "q_keywords": person_name,
-                    "per_page": 10,
-                },
+            logger.warning(
+                "find_contact_by_linkedin_url: create_if_missing is no longer supported — "
+                "Apollo's people search returns teaser data without linkedin_url, so no "
+                "contact was created for %r. Use enrichment/reveal + create_contact instead.",
+                person_name,
             )
-
-            people = people_result.get("people", [])
-            for person in people:
-                person_url = person.get("linkedin_url", "")
-                if person_url and normalize_linkedin_url(person_url) == normalized_url:
-                    # Create contact from people database
-                    create_data = {
-                        "first_name": person.get("first_name", ""),
-                        "last_name": person.get("last_name", ""),
-                        "linkedin_url": person.get("linkedin_url"),
-                        "title": person.get("title"),
-                        "person_id": person.get("id"),
-                    }
-                    if contact_stage_id:
-                        create_data["contact_stage_id"] = contact_stage_id
-
-                    created = await self.create_contact(**create_data)
-                    return created.id
 
         return None
 
@@ -758,14 +748,21 @@ class ApolloClient:
     async def search_people(self, **filters) -> dict:
         """Search people in Apollo's global database.
 
+        Uses ``/mixed_people/api_search``; the older ``/mixed_people/search`` is
+        deprecated for API callers (returns 422). Note that this endpoint returns
+        **teaser data only** — ``first_name``, ``last_name_obfuscated``, ``title``
+        and ``organization``, but not full name / email / linkedin_url (those
+        require a separate enrichment/reveal step and consume credits).
+
         Args:
-            **filters: Search filters (q_keywords, person_titles, person_locations, etc.)
+            **filters: Search filters (q_keywords, person_titles, person_seniorities,
+                person_locations, q_organization_domains_list, etc.).
 
         Returns:
-            Search results dictionary
+            Raw Apollo response dict: ``people`` (list) and ``total_entries`` (int).
         """
         _validate_search_filters(filters, PEOPLE_SEARCH_FILTERS, "people", strict=True)
-        return await self._post("/mixed_people/search", filters)
+        return await self._post("/mixed_people/api_search", filters)
 
     # ========================================================================
     # NOTES
@@ -1269,20 +1266,11 @@ class ApolloClient:
         )
         return EmailerMessage.model_validate(result.get("emailer_message", result))
 
-    async def list_contact_calls(self, contact_id: str) -> list[Call]:
-        """List calls for a contact.
-
-        Args:
-            contact_id: Contact ID
-
-        Returns:
-            List of Call models
-        """
-        result = await self._get(f"/contacts/{contact_id}/calls")
-        return [Call.model_validate(c) for c in result.get("calls", [])]
-
     async def list_contact_tasks(self, contact_id: str) -> list[Task]:
         """List tasks for a contact.
+
+        Apollo removed the ``/contacts/{id}/tasks`` sub-resource route (now 404),
+        so this filters the tasks search by ``contact_ids`` instead.
 
         Args:
             contact_id: Contact ID
@@ -1290,8 +1278,8 @@ class ApolloClient:
         Returns:
             List of Task subclasses matching each task's type
         """
-        result = await self._get(f"/contacts/{contact_id}/tasks")
-        return [resolve_task(t) for t in result.get("tasks", [])]
+        result = await self.search_tasks(contact_ids=[contact_id])
+        return result.items
 
     # ========================================================================
     # CALENDAR EVENTS
@@ -1372,29 +1360,25 @@ class ApolloClient:
     # NEWS & JOBS
     # ========================================================================
 
-    async def list_account_news(self, account_id: str) -> list[dict]:
-        """List news articles for an account.
-
-        Args:
-            account_id: Account ID
-
-        Returns:
-            List of news article dictionaries
-        """
-        result = await self._get(f"/accounts/{account_id}/news")
-        return result.get("news", [])
-
     async def list_account_jobs(self, account_id: str) -> list[dict]:
         """List job postings for an account.
 
+        Apollo removed the ``/accounts/{id}/job_postings`` sub-resource route (now
+        404). Job postings live on the linked *organization*, so this resolves the
+        account's ``organization_id`` and reads ``/organizations/{org_id}/job_postings``.
+
         Args:
-            account_id: Account ID
+            account_id: CRM account ID (its linked organization holds the postings).
 
         Returns:
-            List of job posting dictionaries
+            List of job posting dictionaries (empty if the account has no linked
+            organization).
         """
-        result = await self._get(f"/accounts/{account_id}/job_postings")
-        return result.get("job_postings", [])
+        account = await self.get_account(account_id)
+        if not account.organization_id:
+            return []
+        result = await self._get(f"/organizations/{account.organization_id}/job_postings")
+        return result.get("organization_job_postings", [])
 
     # ========================================================================
     # USAGE & RATE LIMITS

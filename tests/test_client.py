@@ -857,24 +857,14 @@ async def test_get_contact_stages(client: ApolloClient):
     client._client.request.assert_called_once_with("GET", "/contact_stages")
 
 
-async def test_list_contact_calls(client: ApolloClient):
-    """Test GET /contacts/{id}/calls returns list[Call]."""
-    client._client.request.return_value = _make_response(
-        {"calls": [{"id": "call1"}, {"id": "call2"}]}
-    )
-
-    result = await client.list_contact_calls("c1")
-
-    assert isinstance(result, list)
-    assert len(result) == 2
-    assert all(isinstance(c, Call) for c in result)
-    client._client.request.assert_called_once_with("GET", "/contacts/c1/calls")
-
-
 async def test_list_contact_tasks(client: ApolloClient):
-    """Test GET /contacts/{id}/tasks returns list[Task]."""
+    """list_contact_tasks filters the tasks search by contact_ids (the old
+    /contacts/{id}/tasks route was removed by Apollo — now 404)."""
     client._client.request.return_value = _make_response(
-        {"tasks": [{"id": "t1", "type": "call"}, {"id": "t2", "type": "contact_action_item"}]}
+        {
+            "tasks": [{"id": "t1", "type": "call"}, {"id": "t2", "type": "contact_action_item"}],
+            "pagination": {"total_entries": 2},
+        }
     )
 
     result = await client.list_contact_tasks("c1")
@@ -882,35 +872,40 @@ async def test_list_contact_tasks(client: ApolloClient):
     assert isinstance(result, list)
     assert len(result) == 2
     assert all(isinstance(t, BaseTask) for t in result)
-    client._client.request.assert_called_once_with("GET", "/contacts/c1/tasks")
-
-
-async def test_list_account_news(client: ApolloClient):
-    """Test GET /accounts/{id}/news returns list[dict]."""
-    client._client.request.return_value = _make_response(
-        {"news": [{"title": "Big news"}, {"title": "Small news"}]}
-    )
-
-    result = await client.list_account_news("a1")
-
-    assert isinstance(result, list)
-    assert len(result) == 2
-    assert result[0]["title"] == "Big news"
-    client._client.request.assert_called_once_with("GET", "/accounts/a1/news")
+    call_args = client._client.request.call_args
+    assert call_args[0] == ("POST", "/tasks/search")
+    assert call_args[1]["json"]["contact_ids"] == ["c1"]
 
 
 async def test_list_account_jobs(client: ApolloClient):
-    """Test GET /accounts/{id}/job_postings returns list[dict]."""
-    client._client.request.return_value = _make_response(
-        {"job_postings": [{"title": "Engineer"}, {"title": "Designer"}]}
-    )
+    """list_account_jobs resolves the account's organization_id then reads
+    /organizations/{org_id}/job_postings (the old /accounts/{id}/job_postings
+    route was removed by Apollo — now 404)."""
+    client._client.request.side_effect = [
+        _make_response({"account": {"id": "a1", "organization_id": "org9"}}),
+        _make_response(
+            {"organization_job_postings": [{"title": "Engineer"}, {"title": "Designer"}]}
+        ),
+    ]
 
     result = await client.list_account_jobs("a1")
 
-    assert isinstance(result, list)
-    assert len(result) == 2
-    assert result[0]["title"] == "Engineer"
-    client._client.request.assert_called_once_with("GET", "/accounts/a1/job_postings")
+    assert [j["title"] for j in result] == ["Engineer", "Designer"]
+    assert client._client.request.call_args_list[0][0] == ("GET", "/accounts/a1")
+    assert client._client.request.call_args_list[1][0] == (
+        "GET",
+        "/organizations/org9/job_postings",
+    )
+
+
+async def test_list_account_jobs_no_organization(client: ApolloClient):
+    """An account with no linked organization returns [] without a second call."""
+    client._client.request.return_value = _make_response({"account": {"id": "a1"}})
+
+    result = await client.list_account_jobs("a1")
+
+    assert result == []
+    client._client.request.assert_called_once_with("GET", "/accounts/a1")
 
 
 # ============================================================================
@@ -1351,17 +1346,17 @@ async def test_enrich_person(client: ApolloClient):
 
 
 async def test_search_people(client: ApolloClient):
-    """Test POST /mixed_people/search."""
+    """Test POST /mixed_people/api_search (the old /mixed_people/search is deprecated)."""
     client._client.request.return_value = _make_response(
-        {"people": [{"id": "p1", "name": "Alice"}]}
+        {"people": [{"id": "p1", "first_name": "Alice"}], "total_entries": 1}
     )
 
     result = await client.search_people(q_keywords="Alice")
 
-    assert result == {"people": [{"id": "p1", "name": "Alice"}]}
+    assert result == {"people": [{"id": "p1", "first_name": "Alice"}], "total_entries": 1}
 
     call_args = client._client.request.call_args
-    assert call_args[0] == ("POST", "/mixed_people/search")
+    assert call_args[0] == ("POST", "/mixed_people/api_search")
     payload = call_args[1]["json"]
     assert payload["q_keywords"] == "Alice"
 
@@ -1515,82 +1510,38 @@ async def test_find_by_linkedin_url_step2_ambiguous(client: ApolloClient):
     assert result is None
 
 
-async def test_find_by_linkedin_url_step3_create(client: ApolloClient):
-    """Test people DB match → creates contact."""
+async def test_find_by_linkedin_url_create_if_missing_is_noop(client: ApolloClient, caplog):
+    """create_if_missing no longer auto-creates: Apollo's api_search returns teaser
+    data (no linkedin_url), so the former Step 3 is gone. It warns and returns None,
+    and never POSTs to /contacts."""
     step1_response = _make_response({"contacts": [], "pagination": {"total_entries": 0}})
-    # Step 2: Name search — no URL match
     step2_response = _make_response({"contacts": [], "pagination": {"total_entries": 0}})
-    # Step 3: People DB search
-    step3_response = _make_response(
-        {
-            "people": [
-                {
-                    "id": "person_1",
-                    "first_name": "Alice",
-                    "last_name": "Smith",
-                    "linkedin_url": "https://www.linkedin.com/in/alice",
-                    "title": "CTO",
-                }
-            ]
-        }
-    )
-    # Step 3: Create contact
-    step4_response = _make_response(
-        {"contact": {"id": "c_new", "first_name": "Alice", "last_name": "Smith"}}
-    )
-    client._client.request.side_effect = [
-        step1_response,
-        step2_response,
-        step3_response,
-        step4_response,
-    ]
+    client._client.request.side_effect = [step1_response, step2_response]
 
-    result = await client.find_contact_by_linkedin_url(
-        "https://www.linkedin.com/in/alice",
-        person_name="Alice Smith",
-        create_if_missing=True,
-        contact_stage_id="stage_1",
-    )
+    with caplog.at_level("WARNING", logger="qodev_apollo_api.client"):
+        result = await client.find_contact_by_linkedin_url(
+            "https://www.linkedin.com/in/alice",
+            person_name="Alice Smith",
+            create_if_missing=True,
+            contact_stage_id="stage_1",
+        )
 
-    assert result == "c_new"
-
-    # Verify create_contact was called with correct data
-    create_call = client._client.request.call_args_list[3]
-    assert create_call[0] == ("POST", "/contacts")
-    payload = create_call[1]["json"]
-    assert payload["first_name"] == "Alice"
-    assert payload["last_name"] == "Smith"
-    assert payload["person_id"] == "person_1"
-    assert payload["contact_stage_id"] == "stage_1"
+    assert result is None
+    # Only the two lookup searches ran — no people-search POST, no contact creation.
+    assert client._client.request.call_count == 2
+    assert all(call[0][1] != "/contacts" for call in client._client.request.call_args_list)
+    assert any("create_if_missing is no longer supported" in r.message for r in caplog.records)
 
 
 async def test_find_by_linkedin_url_not_found(client: ApolloClient):
-    """Test all three steps fail → None."""
+    """Both existing-contact lookups fail → None."""
     step1_response = _make_response({"contacts": [], "pagination": {"total_entries": 0}})
     step2_response = _make_response({"contacts": [], "pagination": {"total_entries": 0}})
-    # Step 3: People DB — no URL match
-    step3_response = _make_response(
-        {
-            "people": [
-                {
-                    "id": "person_1",
-                    "first_name": "Bob",
-                    "last_name": "Jones",
-                    "linkedin_url": "https://www.linkedin.com/in/bob",
-                }
-            ]
-        }
-    )
-    client._client.request.side_effect = [
-        step1_response,
-        step2_response,
-        step3_response,
-    ]
+    client._client.request.side_effect = [step1_response, step2_response]
 
     result = await client.find_contact_by_linkedin_url(
         "https://www.linkedin.com/in/alice",
         person_name="Alice Smith",
-        create_if_missing=True,
     )
 
     assert result is None
