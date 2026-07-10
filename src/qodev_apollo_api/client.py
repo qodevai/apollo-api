@@ -279,21 +279,27 @@ class ApolloClient:
         create_if_missing: bool = False,
         contact_stage_id: str | None = None,
     ) -> str | None:
-        """Find contact using 3-tier fallback strategy.
+        """Find an existing contact by LinkedIn URL (2-tier lookup).
 
         Strategy:
-        1. Search by LinkedIn URL (exact match)
-        2. Fallback to name search (if unique match)
-        3. People database search for auto-creation (if enabled)
+        1. Search existing contacts by LinkedIn URL (exact match).
+        2. Fall back to a name search among existing contacts (unique match whose
+           normalized URL equals the target).
+
+        Auto-creation from Apollo's people database (the former Step 3) is no
+        longer possible: ``/mixed_people/api_search`` returns teaser data only
+        (no ``linkedin_url``, an obfuscated last name, no email), so a URL match
+        can never succeed and there isn't enough data to create a usable contact.
 
         Args:
             linkedin_url: LinkedIn profile URL
-            person_name: Person's full name (for fallback search)
-            create_if_missing: Auto-create from people database if not found
-            contact_stage_id: Stage ID to assign when creating
+            person_name: Person's full name (for the fallback search)
+            create_if_missing: Deprecated no-op — retained for backwards
+                compatibility. Logs a warning when set; never creates a contact.
+            contact_stage_id: Deprecated no-op (was only used for auto-creation).
 
         Returns:
-            Contact ID if found/created, None otherwise
+            Contact ID if found, None otherwise.
         """
         normalized_url = normalize_linkedin_url(linkedin_url)
 
@@ -322,33 +328,17 @@ class ApolloClient:
                 # Ambiguous - multiple contacts with same name and URL
                 return None
 
-        # Step 3: People database search for auto-creation
+        # Auto-creation from the people database is no longer possible — Apollo's
+        # /mixed_people/api_search returns teaser data (no linkedin_url, obfuscated
+        # last name, no email), so a URL match can't be made nor a usable contact
+        # created. Warn instead of silently doing nothing.
         if create_if_missing and person_name:
-            people_result = await self._post(
-                "/mixed_people/search",
-                {
-                    "q_keywords": person_name,
-                    "per_page": 10,
-                },
+            logger.warning(
+                "find_contact_by_linkedin_url: create_if_missing is no longer supported — "
+                "Apollo's people search returns teaser data without linkedin_url, so no "
+                "contact was created for %r. Use enrichment/reveal + create_contact instead.",
+                person_name,
             )
-
-            people = people_result.get("people", [])
-            for person in people:
-                person_url = person.get("linkedin_url", "")
-                if person_url and normalize_linkedin_url(person_url) == normalized_url:
-                    # Create contact from people database
-                    create_data = {
-                        "first_name": person.get("first_name", ""),
-                        "last_name": person.get("last_name", ""),
-                        "linkedin_url": person.get("linkedin_url"),
-                        "title": person.get("title"),
-                        "person_id": person.get("id"),
-                    }
-                    if contact_stage_id:
-                        create_data["contact_stage_id"] = contact_stage_id
-
-                    created = await self.create_contact(**create_data)
-                    return created.id
 
         return None
 
@@ -673,13 +663,20 @@ class ApolloClient:
     async def search_people(self, **filters) -> dict:
         """Search people in Apollo's global database.
 
+        Uses ``/mixed_people/api_search``; the older ``/mixed_people/search`` is
+        deprecated for API callers (returns 422). Note that this endpoint returns
+        **teaser data only** — ``first_name``, ``last_name_obfuscated``, ``title``
+        and ``organization``, but not full name / email / linkedin_url (those
+        require a separate enrichment/reveal step and consume credits).
+
         Args:
-            **filters: Search filters (q_keywords, person_titles, person_locations, etc.)
+            **filters: Search filters (q_keywords, person_titles, person_seniorities,
+                person_locations, q_organization_domains_list, etc.).
 
         Returns:
-            Search results dictionary
+            Raw Apollo response dict: ``people`` (list) and ``total_entries`` (int).
         """
-        return await self._post("/mixed_people/search", filters)
+        return await self._post("/mixed_people/api_search", filters)
 
     # ========================================================================
     # NOTES
