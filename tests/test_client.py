@@ -368,6 +368,20 @@ async def test_search_deals(client: ApolloClient):
     assert isinstance(result.items[0], Deal)
     assert result.items[0].name == "Big Deal"
 
+
+async def test_search_deals_name_filter_is_q_opportunity_name(client: ApolloClient):
+    """Deal name search is ``q_opportunity_name``; ``q_keywords`` is silently ignored
+    by Apollo for /opportunities/search, so it's not an accepted filter (raises)."""
+    client._client.request.return_value = _make_response(
+        {"opportunities": [], "pagination": {"total_entries": 0}}
+    )
+
+    await client.search_deals(q_opportunity_name="NORRIQ")
+    assert client._client.request.call_args[1]["json"]["q_opportunity_name"] == "NORRIQ"
+
+    with pytest.raises(ValueError, match="Unknown deal search filter"):
+        await client.search_deals(q_keywords="NORRIQ")
+
     assert client._client.request.call_args[0] == ("POST", "/opportunities/search")
 
 

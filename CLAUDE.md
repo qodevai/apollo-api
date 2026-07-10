@@ -115,6 +115,15 @@ Apollo stores notes in ProseMirror JSON format. This library automatically conve
 - This once caused a wrong company to be attached to a deal + a duplicate account.
 - `search_accounts` guards against it: it validates `**filters` against `ACCOUNT_SEARCH_FILTERS` (`q_organization_name`, `account_stage_ids`, `account_label_ids`, `sort_by_field`, `sort_ascending`) and raises `ValueError` on unknown keys. Same silent-drop risk applies to the other `search_*` methods — pass only documented filters.
 
+**Search-filter formats (empirically verified — a wrong format is silently ignored or matches nothing, never an error):**
+- **Deal name search is `q_opportunity_name`, NOT `q_keywords`.** Apollo silently ignores `q_keywords` on `/opportunities/search` (a nonsense keyword returns *every* deal). `q_opportunity_name` is in `DEAL_SEARCH_FILTERS`; `q_keywords` is not (passing it raises).
+- **`organization_num_employees_ranges`** (people): `"min,max"` **comma** strings, e.g. `["1,10"]`, `["1000,5000"]`. A dash (`"1-10"`) is silently ignored (returns baseline).
+- **`person_seniorities`** (people): lowercase enums — `owner, founder, c_suite, partner, vp, head, director, manager, senior, entry, intern`. Uppercase / free text match 0 rows.
+- **`person_locations` / `organization_locations`**: country name, 2-letter code (`"US"` == `"United States"`), or `"City, State, Country"`.
+- **`revenue_range` / `organization_num_jobs_range`**: dict `{"min": int, "max": int}`. **`contact_email_status`**: `verified | unverified | likely to engage | unavailable`.
+- **`contacts` `linkedin_url`**: must be Apollo's canonical form `http://www.linkedin.com/in/<slug>` (http, lowercased, url-encoded) or it matches nothing.
+- Full per-filter formats live in each `search_*` docstring.
+
 **`opportunities/update_roles` needs the role type NESTED under a `role` array:**
 - Correct per-entry shape: `{"contact_id": …, "is_primary": …, "role": [{"opportunity_contact_role_type_id": …, "is_primary": …}]}`.
 - Sending `opportunity_contact_role_type_id` flat on the entry (no `role` key) makes Apollo 422 with `undefined method 'map' for nil`.
