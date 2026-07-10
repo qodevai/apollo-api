@@ -140,10 +140,14 @@ def _validate_search_filters(
     unknown = set(filters) - allowed
     if not unknown:
         return
+    # Strict allowlists are authoritative ("Supported filters"); lenient ones are
+    # seeded from known usage and may be incomplete ("Known filters"), so the
+    # wording doesn't imply the warned-about key is definitely invalid.
+    label = "Supported filters" if strict else "Known filters"
     msg = (
         f"Unknown {resource} search filter(s): {', '.join(sorted(unknown))}. "
         f"Apollo silently ignores unrecognised keys and returns an unfiltered "
-        f"default page. Supported filters: {', '.join(sorted(allowed))}."
+        f"default page. {label}: {', '.join(sorted(allowed))}."
     )
     if strict:
         raise ValueError(msg)
