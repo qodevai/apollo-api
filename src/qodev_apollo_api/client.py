@@ -1179,20 +1179,11 @@ class ApolloClient:
         )
         return EmailerMessage.model_validate(result.get("emailer_message", result))
 
-    async def list_contact_calls(self, contact_id: str) -> list[Call]:
-        """List calls for a contact.
-
-        Args:
-            contact_id: Contact ID
-
-        Returns:
-            List of Call models
-        """
-        result = await self._get(f"/contacts/{contact_id}/calls")
-        return [Call.model_validate(c) for c in result.get("calls", [])]
-
     async def list_contact_tasks(self, contact_id: str) -> list[Task]:
         """List tasks for a contact.
+
+        Apollo removed the ``/contacts/{id}/tasks`` sub-resource route (now 404),
+        so this filters the tasks search by ``contact_ids`` instead.
 
         Args:
             contact_id: Contact ID
@@ -1200,8 +1191,8 @@ class ApolloClient:
         Returns:
             List of Task subclasses matching each task's type
         """
-        result = await self._get(f"/contacts/{contact_id}/tasks")
-        return [resolve_task(t) for t in result.get("tasks", [])]
+        result = await self.search_tasks(contact_ids=[contact_id])
+        return result.items
 
     # ========================================================================
     # CALENDAR EVENTS
@@ -1278,29 +1269,25 @@ class ApolloClient:
     # NEWS & JOBS
     # ========================================================================
 
-    async def list_account_news(self, account_id: str) -> list[dict]:
-        """List news articles for an account.
-
-        Args:
-            account_id: Account ID
-
-        Returns:
-            List of news article dictionaries
-        """
-        result = await self._get(f"/accounts/{account_id}/news")
-        return result.get("news", [])
-
     async def list_account_jobs(self, account_id: str) -> list[dict]:
         """List job postings for an account.
 
+        Apollo removed the ``/accounts/{id}/job_postings`` sub-resource route (now
+        404). Job postings live on the linked *organization*, so this resolves the
+        account's ``organization_id`` and reads ``/organizations/{org_id}/job_postings``.
+
         Args:
-            account_id: Account ID
+            account_id: CRM account ID (its linked organization holds the postings).
 
         Returns:
-            List of job posting dictionaries
+            List of job posting dictionaries (empty if the account has no linked
+            organization).
         """
-        result = await self._get(f"/accounts/{account_id}/job_postings")
-        return result.get("job_postings", [])
+        account = await self.get_account(account_id)
+        if not account.organization_id:
+            return []
+        result = await self._get(f"/organizations/{account.organization_id}/job_postings")
+        return result.get("organization_job_postings", [])
 
     # ========================================================================
     # USAGE & RATE LIMITS

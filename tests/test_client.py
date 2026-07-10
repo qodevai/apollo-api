@@ -795,24 +795,14 @@ async def test_get_contact_stages(client: ApolloClient):
     client._client.request.assert_called_once_with("GET", "/contact_stages")
 
 
-async def test_list_contact_calls(client: ApolloClient):
-    """Test GET /contacts/{id}/calls returns list[Call]."""
-    client._client.request.return_value = _make_response(
-        {"calls": [{"id": "call1"}, {"id": "call2"}]}
-    )
-
-    result = await client.list_contact_calls("c1")
-
-    assert isinstance(result, list)
-    assert len(result) == 2
-    assert all(isinstance(c, Call) for c in result)
-    client._client.request.assert_called_once_with("GET", "/contacts/c1/calls")
-
-
 async def test_list_contact_tasks(client: ApolloClient):
-    """Test GET /contacts/{id}/tasks returns list[Task]."""
+    """list_contact_tasks filters the tasks search by contact_ids (the old
+    /contacts/{id}/tasks route was removed by Apollo — now 404)."""
     client._client.request.return_value = _make_response(
-        {"tasks": [{"id": "t1", "type": "call"}, {"id": "t2", "type": "contact_action_item"}]}
+        {
+            "tasks": [{"id": "t1", "type": "call"}, {"id": "t2", "type": "contact_action_item"}],
+            "pagination": {"total_entries": 2},
+        }
     )
 
     result = await client.list_contact_tasks("c1")
@@ -820,35 +810,40 @@ async def test_list_contact_tasks(client: ApolloClient):
     assert isinstance(result, list)
     assert len(result) == 2
     assert all(isinstance(t, BaseTask) for t in result)
-    client._client.request.assert_called_once_with("GET", "/contacts/c1/tasks")
-
-
-async def test_list_account_news(client: ApolloClient):
-    """Test GET /accounts/{id}/news returns list[dict]."""
-    client._client.request.return_value = _make_response(
-        {"news": [{"title": "Big news"}, {"title": "Small news"}]}
-    )
-
-    result = await client.list_account_news("a1")
-
-    assert isinstance(result, list)
-    assert len(result) == 2
-    assert result[0]["title"] == "Big news"
-    client._client.request.assert_called_once_with("GET", "/accounts/a1/news")
+    call_args = client._client.request.call_args
+    assert call_args[0] == ("POST", "/tasks/search")
+    assert call_args[1]["json"]["contact_ids"] == ["c1"]
 
 
 async def test_list_account_jobs(client: ApolloClient):
-    """Test GET /accounts/{id}/job_postings returns list[dict]."""
-    client._client.request.return_value = _make_response(
-        {"job_postings": [{"title": "Engineer"}, {"title": "Designer"}]}
-    )
+    """list_account_jobs resolves the account's organization_id then reads
+    /organizations/{org_id}/job_postings (the old /accounts/{id}/job_postings
+    route was removed by Apollo — now 404)."""
+    client._client.request.side_effect = [
+        _make_response({"account": {"id": "a1", "organization_id": "org9"}}),
+        _make_response(
+            {"organization_job_postings": [{"title": "Engineer"}, {"title": "Designer"}]}
+        ),
+    ]
 
     result = await client.list_account_jobs("a1")
 
-    assert isinstance(result, list)
-    assert len(result) == 2
-    assert result[0]["title"] == "Engineer"
-    client._client.request.assert_called_once_with("GET", "/accounts/a1/job_postings")
+    assert [j["title"] for j in result] == ["Engineer", "Designer"]
+    assert client._client.request.call_args_list[0][0] == ("GET", "/accounts/a1")
+    assert client._client.request.call_args_list[1][0] == (
+        "GET",
+        "/organizations/org9/job_postings",
+    )
+
+
+async def test_list_account_jobs_no_organization(client: ApolloClient):
+    """An account with no linked organization returns [] without a second call."""
+    client._client.request.return_value = _make_response({"account": {"id": "a1"}})
+
+    result = await client.list_account_jobs("a1")
+
+    assert result == []
+    client._client.request.assert_called_once_with("GET", "/accounts/a1")
 
 
 # ============================================================================
