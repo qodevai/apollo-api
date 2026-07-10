@@ -110,6 +110,17 @@ Apollo stores notes in ProseMirror JSON format. This library automatically conve
 - Custom URLs can be added/removed
 - Always normalize and verify matches
 
+**`accounts/search` silently drops unknown filter keys:**
+- Passing an unrecognised filter (e.g. `query=` instead of `q_organization_name=`) does **not** error — Apollo ignores it and returns an unfiltered default page (~28k accounts, "Google" first) that looks like a real match.
+- This once caused a wrong company to be attached to a deal + a duplicate account.
+- `search_accounts` guards against it: it validates `**filters` against `ACCOUNT_SEARCH_FILTERS` (`q_organization_name`, `account_stage_ids`, `account_label_ids`, `sort_by_field`, `sort_ascending`) and raises `ValueError` on unknown keys. Same silent-drop risk applies to the other `search_*` methods — pass only documented filters.
+
+**`opportunities/update_roles` needs the role type NESTED under a `role` array:**
+- Correct per-entry shape: `{"contact_id": …, "is_primary": …, "role": [{"opportunity_contact_role_type_id": …, "is_primary": …}]}`.
+- Sending `opportunity_contact_role_type_id` flat on the entry (no `role` key) makes Apollo 422 with `undefined method 'map' for nil`.
+- `update_opportunity_roles` reshapes the flat `RoleAssignment` entries into this wire format; callers still pass flat entries.
+- The endpoint **replaces** the full role set and works with a normal (non-master) API key.
+
 ## Testing Strategy
 
 ### Unit Tests
