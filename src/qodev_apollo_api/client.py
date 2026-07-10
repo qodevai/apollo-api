@@ -325,7 +325,7 @@ class ApolloClient:
         # Step 3: People database search for auto-creation
         if create_if_missing and person_name:
             people_result = await self._post(
-                "/mixed_people/search",
+                "/mixed_people/api_search",
                 {
                     "q_keywords": person_name,
                     "per_page": 10,
@@ -673,13 +673,21 @@ class ApolloClient:
     async def search_people(self, **filters) -> dict:
         """Search people in Apollo's global database.
 
+        Uses ``/mixed_people/api_search``; the older ``/mixed_people/search`` is
+        deprecated for API callers (returns 422). Note that this endpoint returns
+        **teaser data only** — ``first_name``, ``last_name_obfuscated``, ``title``
+        and ``organization``, but not full name / email / linkedin_url (those
+        require a separate enrichment/reveal step and consume credits).
+
         Args:
-            **filters: Search filters (q_keywords, person_titles, person_locations, etc.)
+            **filters: Search filters (q_keywords, person_titles, person_seniorities,
+                person_locations, q_organization_domains_list, etc.). See
+                ``PEOPLE_SEARCH_FILTERS`` for the validated set.
 
         Returns:
-            Search results dictionary
+            Raw Apollo response dict: ``people`` (list) and ``total_entries`` (int).
         """
-        return await self._post("/mixed_people/search", filters)
+        return await self._post("/mixed_people/api_search", filters)
 
     # ========================================================================
     # NOTES

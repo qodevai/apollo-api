@@ -1289,17 +1289,17 @@ async def test_enrich_person(client: ApolloClient):
 
 
 async def test_search_people(client: ApolloClient):
-    """Test POST /mixed_people/search."""
+    """Test POST /mixed_people/api_search (the old /mixed_people/search is deprecated)."""
     client._client.request.return_value = _make_response(
-        {"people": [{"id": "p1", "name": "Alice"}]}
+        {"people": [{"id": "p1", "first_name": "Alice"}], "total_entries": 1}
     )
 
     result = await client.search_people(q_keywords="Alice")
 
-    assert result == {"people": [{"id": "p1", "name": "Alice"}]}
+    assert result == {"people": [{"id": "p1", "first_name": "Alice"}], "total_entries": 1}
 
     call_args = client._client.request.call_args
-    assert call_args[0] == ("POST", "/mixed_people/search")
+    assert call_args[0] == ("POST", "/mixed_people/api_search")
     payload = call_args[1]["json"]
     assert payload["q_keywords"] == "Alice"
 
