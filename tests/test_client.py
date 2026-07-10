@@ -290,6 +290,68 @@ async def test_search_accounts_allows_documented_filters(client: ApolloClient):
     assert body["sort_by_field"] == "account_created_at"
 
 
+# --- Generalized search-filter validation (strict raise vs lenient warn) ------
+
+
+@pytest.mark.parametrize(
+    "method,good_filter",
+    [
+        ("search_contacts", {"q_keywords": "x"}),
+        ("search_deals", {"opportunity_stage_ids": ["s1"]}),
+        ("search_people", {"person_titles": ["CEO"]}),
+    ],
+)
+async def test_strict_search_methods_reject_unknown_filter(client, method, good_filter):
+    """contacts/deals/people raise on an unknown key (like accounts) and never call Apollo."""
+    client._client.request.return_value = _make_response({})
+    with pytest.raises(ValueError, match=r"Unknown .* search filter"):
+        await getattr(client, method)(query="typo")
+    client._client.request.assert_not_called()
+
+    # A documented filter passes validation and reaches Apollo.
+    await getattr(client, method)(**good_filter)
+    assert client._client.request.called
+
+
+async def test_search_people_allows_page_and_per_page(client: ApolloClient):
+    """search_people has no explicit page/limit, so page/per_page are valid filters."""
+    client._client.request.return_value = _make_response({"people": [], "contacts": []})
+    await client.search_people(q_keywords="x", page=2, per_page=50)
+    assert client._client.request.call_args[1]["json"]["per_page"] == 50
+
+
+@pytest.mark.parametrize(
+    "method,endpoint_key",
+    [
+        ("search_notes", "notes"),
+        ("search_calls", "phone_calls"),
+        ("search_tasks", "tasks"),
+        ("search_emails", "emailer_messages"),
+        ("search_conversations", "conversations"),
+        ("search_calendar_events", "calendar_events"),
+    ],
+)
+async def test_lenient_search_methods_warn_but_still_send(client, method, endpoint_key, caplog):
+    """Activity endpoints log a warning on an unknown key but still send the request."""
+    client._client.request.return_value = _make_response({endpoint_key: [], "pagination": {}})
+
+    with caplog.at_level("WARNING", logger="qodev_apollo_api.client"):
+        await getattr(client, method)(bogus_filter="x")
+
+    assert any("Unknown" in r.message and "search filter" in r.message for r in caplog.records)
+    # Lenient: the request is still sent (unknown key forwarded, not blocked).
+    assert client._client.request.called
+    assert client._client.request.call_args[1]["json"]["bogus_filter"] == "x"
+
+
+async def test_lenient_search_method_no_warn_on_known_filter(client, caplog):
+    """A known activity filter passes without a warning."""
+    client._client.request.return_value = _make_response({"notes": [], "pagination": {}})
+    with caplog.at_level("WARNING", logger="qodev_apollo_api.client"):
+        await client.search_notes(contact_ids=["c1"])
+    assert not any("Unknown" in r.message for r in caplog.records)
+
+
 async def test_search_deals(client: ApolloClient):
     """Test POST /opportunities/search returns PaginatedResponse[Deal]."""
     client._client.request.return_value = _make_response(
