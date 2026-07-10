@@ -1453,82 +1453,38 @@ async def test_find_by_linkedin_url_step2_ambiguous(client: ApolloClient):
     assert result is None
 
 
-async def test_find_by_linkedin_url_step3_create(client: ApolloClient):
-    """Test people DB match → creates contact."""
+async def test_find_by_linkedin_url_create_if_missing_is_noop(client: ApolloClient, caplog):
+    """create_if_missing no longer auto-creates: Apollo's api_search returns teaser
+    data (no linkedin_url), so the former Step 3 is gone. It warns and returns None,
+    and never POSTs to /contacts."""
     step1_response = _make_response({"contacts": [], "pagination": {"total_entries": 0}})
-    # Step 2: Name search — no URL match
     step2_response = _make_response({"contacts": [], "pagination": {"total_entries": 0}})
-    # Step 3: People DB search
-    step3_response = _make_response(
-        {
-            "people": [
-                {
-                    "id": "person_1",
-                    "first_name": "Alice",
-                    "last_name": "Smith",
-                    "linkedin_url": "https://www.linkedin.com/in/alice",
-                    "title": "CTO",
-                }
-            ]
-        }
-    )
-    # Step 3: Create contact
-    step4_response = _make_response(
-        {"contact": {"id": "c_new", "first_name": "Alice", "last_name": "Smith"}}
-    )
-    client._client.request.side_effect = [
-        step1_response,
-        step2_response,
-        step3_response,
-        step4_response,
-    ]
+    client._client.request.side_effect = [step1_response, step2_response]
 
-    result = await client.find_contact_by_linkedin_url(
-        "https://www.linkedin.com/in/alice",
-        person_name="Alice Smith",
-        create_if_missing=True,
-        contact_stage_id="stage_1",
-    )
+    with caplog.at_level("WARNING", logger="qodev_apollo_api.client"):
+        result = await client.find_contact_by_linkedin_url(
+            "https://www.linkedin.com/in/alice",
+            person_name="Alice Smith",
+            create_if_missing=True,
+            contact_stage_id="stage_1",
+        )
 
-    assert result == "c_new"
-
-    # Verify create_contact was called with correct data
-    create_call = client._client.request.call_args_list[3]
-    assert create_call[0] == ("POST", "/contacts")
-    payload = create_call[1]["json"]
-    assert payload["first_name"] == "Alice"
-    assert payload["last_name"] == "Smith"
-    assert payload["person_id"] == "person_1"
-    assert payload["contact_stage_id"] == "stage_1"
+    assert result is None
+    # Only the two lookup searches ran — no people-search POST, no contact creation.
+    assert client._client.request.call_count == 2
+    assert all(call[0][1] != "/contacts" for call in client._client.request.call_args_list)
+    assert any("create_if_missing is no longer supported" in r.message for r in caplog.records)
 
 
 async def test_find_by_linkedin_url_not_found(client: ApolloClient):
-    """Test all three steps fail → None."""
+    """Both existing-contact lookups fail → None."""
     step1_response = _make_response({"contacts": [], "pagination": {"total_entries": 0}})
     step2_response = _make_response({"contacts": [], "pagination": {"total_entries": 0}})
-    # Step 3: People DB — no URL match
-    step3_response = _make_response(
-        {
-            "people": [
-                {
-                    "id": "person_1",
-                    "first_name": "Bob",
-                    "last_name": "Jones",
-                    "linkedin_url": "https://www.linkedin.com/in/bob",
-                }
-            ]
-        }
-    )
-    client._client.request.side_effect = [
-        step1_response,
-        step2_response,
-        step3_response,
-    ]
+    client._client.request.side_effect = [step1_response, step2_response]
 
     result = await client.find_contact_by_linkedin_url(
         "https://www.linkedin.com/in/alice",
         person_name="Alice Smith",
-        create_if_missing=True,
     )
 
     assert result is None
