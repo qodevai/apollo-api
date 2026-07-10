@@ -46,10 +46,22 @@ from .utils import markdown_to_prosemirror, normalize_linkedin_url, prosemirror_
 
 logger = logging.getLogger(__name__)
 
-# Filters accepted by POST /accounts/search (besides page/per_page, which are
-# passed explicitly). Apollo *silently drops* unrecognised keys and returns an
-# unfiltered default page, so we validate against this allowlist and raise
-# instead of returning wrong data. See ``ApolloClient.search_accounts``.
+# ---------------------------------------------------------------------------
+# Search-filter allowlists
+#
+# Apollo's /search endpoints *silently drop* unrecognised filter keys and return
+# an unfiltered default page that looks like a real match (e.g. a typo'd
+# ``query=`` on accounts returned ~28k rows, "Google" first). To stop that, each
+# search method validates its ``**filters`` against the relevant allowlist below.
+#
+# Endpoints with a documented, stable flat-filter vocabulary are validated
+# *strictly* (raise on unknown). The activity endpoints below have no published
+# filter docs, so an over-tight allowlist would reject valid filters — those are
+# validated *leniently* (log a warning, still send the request). See
+# ``_validate_search_filters``.
+# ---------------------------------------------------------------------------
+
+# Strict (raise on unknown) — documented flat-filter endpoints.
 ACCOUNT_SEARCH_FILTERS = frozenset(
     {
         "q_organization_name",
@@ -59,6 +71,83 @@ ACCOUNT_SEARCH_FILTERS = frozenset(
         "sort_ascending",
     }
 )
+CONTACT_SEARCH_FILTERS = frozenset(
+    {
+        "q_keywords",
+        "contact_stage_ids",
+        "contact_label_ids",
+        "linkedin_url",
+        "sort_by_field",
+        "sort_ascending",
+    }
+)
+DEAL_SEARCH_FILTERS = frozenset(
+    {
+        "q_keywords",
+        "opportunity_stage_ids",
+        "sort_by_field",
+        "sort_ascending",
+    }
+)
+# search_people passes *everything* (incl. page/per_page) through **filters, so
+# those are part of the allowlist here (unlike the methods with explicit args).
+PEOPLE_SEARCH_FILTERS = frozenset(
+    {
+        "q_keywords",
+        "person_titles",
+        "include_similar_titles",
+        "person_seniorities",
+        "person_locations",
+        "organization_locations",
+        "organization_ids",
+        "organization_num_employees_ranges",
+        "q_organization_domains_list",
+        "revenue_range",
+        "currently_using_all_of_technology_uids",
+        "currently_using_any_of_technology_uids",
+        "currently_not_using_any_of_technology_uids",
+        "q_organization_job_titles",
+        "organization_job_locations",
+        "organization_num_jobs_range",
+        "organization_job_posted_at_range",
+        "contact_email_status",
+        "page",
+        "per_page",
+    }
+)
+
+# Lenient (warn on unknown) — undocumented activity endpoints. Seeded from known
+# usage; incompleteness only costs a log line, never a broken call.
+NOTE_SEARCH_FILTERS = frozenset({"contact_ids", "account_ids", "opportunity_ids", "q_keywords"})
+CALL_SEARCH_FILTERS = frozenset({"contact_ids", "account_ids", "user_ids", "q_keywords"})
+TASK_SEARCH_FILTERS = frozenset({"contact_ids", "account_ids", "opportunity_ids", "q_keywords"})
+EMAIL_SEARCH_FILTERS = frozenset({"contact_ids", "emailer_campaign_ids", "q_keywords"})
+CONVERSATION_SEARCH_FILTERS = frozenset({"q_keywords"})
+CALENDAR_EVENT_SEARCH_FILTERS = frozenset({"contact_ids", "user_ids", "q_keywords"})
+
+
+def _validate_search_filters(
+    filters: dict, allowed: frozenset[str], resource: str, *, strict: bool
+) -> None:
+    """Guard against Apollo silently dropping unknown ``**filters`` keys.
+
+    Apollo ignores unrecognised keys on its /search endpoints and returns an
+    unfiltered default page that looks like a real match. When ``strict``, raise
+    ``ValueError`` on any unknown key (documented endpoints); otherwise log a
+    warning and let the request through (undocumented endpoints, where the full
+    valid set isn't published and a hard allowlist would reject valid filters).
+    """
+    unknown = set(filters) - allowed
+    if not unknown:
+        return
+    msg = (
+        f"Unknown {resource} search filter(s): {', '.join(sorted(unknown))}. "
+        f"Apollo silently ignores unrecognised keys and returns an unfiltered "
+        f"default page. Supported filters: {', '.join(sorted(allowed))}."
+    )
+    if strict:
+        raise ValueError(msg)
+    logger.warning(msg)
 
 
 class ApolloClient:
@@ -202,6 +291,7 @@ class ApolloClient:
         Returns:
             Paginated response with Contact items
         """
+        _validate_search_filters(filters, CONTACT_SEARCH_FILTERS, "contact", strict=True)
         data = {"page": page, "per_page": min(limit, 100), **filters}
         result = await self._post("/contacts/search", data)
 
@@ -379,17 +469,7 @@ class ApolloClient:
                 wrong accounts. Note ``query=`` is **not** a valid filter — use
                 ``q_organization_name=`` to search by name.
         """
-        unknown = set(filters) - ACCOUNT_SEARCH_FILTERS
-        if unknown:
-            raise ValueError(
-                "Unknown account search filter(s): "
-                + ", ".join(sorted(unknown))
-                + ". Apollo silently ignores unrecognised keys and returns an unfiltered "
-                "default page. Supported filters: "
-                + ", ".join(sorted(ACCOUNT_SEARCH_FILTERS))
-                + " (to search by name use q_organization_name=)."
-            )
-
+        _validate_search_filters(filters, ACCOUNT_SEARCH_FILTERS, "account", strict=True)
         data = {"page": page, "per_page": min(limit, 100), **filters}
         result = await self._post("/accounts/search", data)
 
@@ -431,6 +511,7 @@ class ApolloClient:
         Returns:
             Paginated response with Deal items
         """
+        _validate_search_filters(filters, DEAL_SEARCH_FILTERS, "deal", strict=True)
         data = {"page": page, "per_page": min(limit, 100), **filters}
         result = await self._post("/opportunities/search", data)
 
@@ -679,6 +760,7 @@ class ApolloClient:
         Returns:
             Search results dictionary
         """
+        _validate_search_filters(filters, PEOPLE_SEARCH_FILTERS, "people", strict=True)
         return await self._post("/mixed_people/search", filters)
 
     # ========================================================================
@@ -698,6 +780,7 @@ class ApolloClient:
         Returns:
             Paginated response with Note items (content converted to Markdown)
         """
+        _validate_search_filters(filters, NOTE_SEARCH_FILTERS, "note", strict=False)
         data = {"page": page, "per_page": min(limit, 100), **filters}
         result = await self._post("/notes/search", data)
 
@@ -783,6 +866,7 @@ class ApolloClient:
         Returns:
             Paginated response with Call items
         """
+        _validate_search_filters(filters, CALL_SEARCH_FILTERS, "call", strict=False)
         data = {"page": page, "per_page": min(limit, 100), **filters}
         result = await self._post("/phone_calls/search", data)
 
@@ -822,6 +906,7 @@ class ApolloClient:
         Returns:
             Paginated response with specific Task subclass items
         """
+        _validate_search_filters(filters, TASK_SEARCH_FILTERS, "task", strict=False)
         data: dict[str, Any] = {"page": page, "per_page": min(limit, 100), **filters}
         if task_type_cds is not None:
             data["task_type_cds"] = task_type_cds
@@ -865,6 +950,7 @@ class ApolloClient:
         Returns:
             Paginated response with Email items
         """
+        _validate_search_filters(filters, EMAIL_SEARCH_FILTERS, "email", strict=False)
         data = {"page": page, "per_page": min(limit, 100), **filters}
         result = await self._post("/emailer_messages/search", data)
 
@@ -1220,6 +1306,9 @@ class ApolloClient:
         Returns:
             Paginated response with CalendarEvent items
         """
+        _validate_search_filters(
+            filters, CALENDAR_EVENT_SEARCH_FILTERS, "calendar event", strict=False
+        )
         data = {"page": page, "per_page": min(limit, 100), **filters}
         result = await self._post("/calendar_events/search", data)
 
@@ -1249,6 +1338,7 @@ class ApolloClient:
         Returns:
             Paginated response with Conversation items
         """
+        _validate_search_filters(filters, CONVERSATION_SEARCH_FILTERS, "conversation", strict=False)
         data = {"page": page, "per_page": min(limit, 25), **filters}
         result = await self._post("/conversations/search", data)
 
