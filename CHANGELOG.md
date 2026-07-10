@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-10
+
+### Fixed
+
+- **People search** now uses `/mixed_people/api_search`; the old `/mixed_people/search` is deprecated for API callers (422). Note the new endpoint returns teaser data only (no full name/email/linkedin_url without a credit-consuming reveal). The `find_contact_by_linkedin_url` auto-creation step is retired accordingly (it warns; `create_if_missing` is a documented no-op).
+- **Deal name search** uses `q_opportunity_name`, not `q_keywords` (which Apollo silently ignores on `/opportunities/search`). `DEAL_SEARCH_FILTERS` allows `q_opportunity_name` and rejects `q_keywords`.
+- `list_contact_tasks` now filters the tasks search by `contact_ids` (the `/contacts/{id}/tasks` route was removed by Apollo — 404).
+- `list_account_jobs` resolves the account's `organization_id` and reads `/organizations/{org_id}/job_postings` (the `/accounts/{id}/job_postings` route was removed).
+
+### Added
+
+- Search-filter validation across **all** `search_*` methods: unknown filter keys raise (documented endpoints: contacts/deals/people/accounts) or warn (undocumented activity endpoints), preventing Apollo's silent-drop → unfiltered-default-page footgun.
+- `search_*` docstrings now document each filter's empirically-verified accepted format (seniority enums, `"min,max"` employee ranges, location formats, dict ranges, email-status values, canonical `linkedin_url`).
+
+### Removed
+
+- **Breaking:** `list_contact_calls` and `list_account_news` — Apollo removed the underlying routes (`/contacts/{id}/calls`, `/accounts/{id}/news`) with no working replacement.
+
 ## [0.4.0] - 2026-07-09
 
 ### Added
