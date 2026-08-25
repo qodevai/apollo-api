@@ -157,6 +157,66 @@ def _validate_search_filters(
     logger.warning(msg)
 
 
+# Apollo returns its rate-limit state on every response, including the 429 that
+# reports exhaustion. Limits are metered PER ENDPOINT: /notes can be fully spent
+# while /tasks on the same key is untouched.
+_LIMIT_HEADERS = (
+    ("minute", "x-rate-limit-minute", "x-minute-requests-left"),
+    ("hourly", "x-rate-limit-hourly", "x-hourly-requests-left"),
+    ("daily", "x-rate-limit-24-hour", "x-24-hour-requests-left"),
+)
+
+
+def _parse_limit_headers(headers: Any) -> dict[str, int | None]:
+    """Parse the rate-limit headers, keeping absence distinct from zero.
+
+    `int(value or 0)` would report a missing header as a bucket at zero — i.e.
+    claim exhaustion we never observed. None means "not reported".
+    """
+
+    def _get(name: str) -> int | None:
+        raw = headers.get(name)
+        if raw is None or raw == "":
+            return None
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+
+    parsed: dict[str, int | None] = {}
+    for window, limit_header, left_header in _LIMIT_HEADERS:
+        parsed[f"{window}_limit"] = _get(limit_header)
+        parsed[f"{window}_left"] = _get(left_header)
+    return parsed
+
+
+def _describe_exhaustion(endpoint: str, limits: dict[str, int | None]) -> str:
+    """Name the endpoint and the window(s) that actually ran out."""
+    spent = [
+        f"{window} {limits[f'{window}_left']}/{limits[f'{window}_limit']}"
+        for window, _lim, _left in _LIMIT_HEADERS
+        if limits.get(f"{window}_left") == 0
+    ]
+    remaining = ", ".join(
+        f"{window} {limits[f'{window}_left']}/{limits[f'{window}_limit']}"
+        for window, _lim, _left in _LIMIT_HEADERS
+        if limits.get(f"{window}_left") is not None
+    )
+    if spent:
+        return (
+            f"Rate limit exceeded on {endpoint}: {', '.join(spent)} exhausted"
+            + (f" (buckets: {remaining})" if remaining else "")
+            + ". Apollo meters per endpoint, so other endpoints may still have budget."
+        )
+    if remaining:
+        return (
+            f"Rate limit exceeded on {endpoint}, but no bucket reported zero "
+            f"(buckets: {remaining}) — the limit may be one Apollo does not "
+            f"expose in headers."
+        )
+    return f"Rate limit exceeded on {endpoint}; Apollo reported no rate-limit headers."
+
+
 class ApolloClient:
     """Async Apollo.io API client with context manager support."""
 
@@ -178,7 +238,7 @@ class ApolloClient:
 
         self._client: httpx.AsyncClient | None = None
         self._timeout = timeout
-        self._rate_limit_status: dict[str, int] = {}
+        self._rate_limit_status: dict[str, int | None] = {}
 
     async def __aenter__(self) -> "ApolloClient":
         """Enter async context manager."""
@@ -208,11 +268,18 @@ class ApolloClient:
             self._client = None
 
     @property
-    def rate_limit_status(self) -> dict[str, int]:
-        """Current rate limit status from last request.
+    def rate_limit_status(self) -> dict[str, int | None]:
+        """Rate-limit state reported by the most recent response.
+
+        These are the buckets for the endpoint that response came from —
+        Apollo meters per endpoint, so a reading taken from ``/tasks`` says
+        nothing about ``/notes``.
 
         Returns:
-            Dictionary with keys: hourly_limit, hourly_left, minute_limit, minute_left, daily_limit, daily_left
+            Dictionary with keys: minute_limit, minute_left, hourly_limit,
+            hourly_left, daily_limit, daily_left. A value of ``None`` means
+            Apollo did not report that header, which is deliberately distinct
+            from a bucket that has genuinely reached zero.
         """
         return self._rate_limit_status
 
@@ -241,15 +308,7 @@ class ApolloClient:
             response = await self._client.request(method, endpoint, **kwargs)
 
             # Track rate limits from headers
-            headers = response.headers
-            self._rate_limit_status = {
-                "hourly_limit": int(headers.get("x-rate-limit-hourly") or 0),
-                "hourly_left": int(headers.get("x-hourly-requests-left") or 0),
-                "minute_limit": int(headers.get("x-rate-limit-minute") or 0),
-                "minute_left": int(headers.get("x-minute-requests-left") or 0),
-                "daily_limit": int(headers.get("x-rate-limit-24-hour") or 0),
-                "daily_left": int(headers.get("x-24-hour-requests-left") or 0),
-            }
+            self._rate_limit_status = _parse_limit_headers(response.headers)
 
             response.raise_for_status()
             return response.json()
@@ -258,10 +317,18 @@ class ApolloClient:
             if e.response.status_code == 401:
                 raise AuthenticationError("Authentication failed. Check your API key.") from e
             elif e.response.status_code == 429:
+                # Report what Apollo actually said. The previous hardcoded
+                # "400/hour, 200/min, 2000/day" was a constant, not an
+                # observation: it read identically whether the minute, the
+                # hour, or the day was spent, and on which endpoint. That
+                # ambiguity hid a job burning a single endpoint's daily budget.
                 retry_after = e.response.headers.get("Retry-After")
+                limits = _parse_limit_headers(e.response.headers)
                 raise RateLimitError(
-                    "Rate limit exceeded. Apollo limits: 400/hour, 200/min, 2000/day",
+                    _describe_exhaustion(endpoint, limits),
                     retry_after=int(retry_after) if retry_after else None,
+                    endpoint=endpoint,
+                    limits=limits,
                 ) from e
             else:
                 raise APIError(

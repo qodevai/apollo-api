@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`RateLimitError` now reports what Apollo actually said.** The message was the
+  constant `"Rate limit exceeded. Apollo limits: 400/hour, 200/min, 2000/day"` —
+  identical whether the minute, the hour or the day was spent, and on which
+  endpoint. Apollo meters **per endpoint**, so that ambiguity actively misled:
+  in one incident `/notes` was at `daily 0/2000` while `/tasks` on the same key
+  reported `1984/2000` left, and the message gave no way to tell.
+
+  It now names the endpoint and the exhausted window, e.g.
+  `Rate limit exceeded on /notes: daily 0/2000 exhausted (buckets: minute
+  200/200, hourly 400/400, daily 0/2000). Apollo meters per endpoint, so other
+  endpoints may still have budget.` The exception carries `.endpoint` and
+  `.limits` so a caller can pace itself instead of guessing.
+
+- **`rate_limit_status` distinguishes an absent header from a spent bucket.**
+  Values are now `int | None`; previously `int(header or 0)` reported a missing
+  header as `0`, i.e. as exhaustion that was never observed. **Breaking** for
+  callers annotating the return as `dict[str, int]`.
+
 ## [0.5.0] - 2026-07-10
 
 ### Fixed
