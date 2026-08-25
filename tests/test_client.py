@@ -1686,3 +1686,39 @@ async def test_rate_limit_status_survives_a_garbage_header(client: ApolloClient)
     await client._request("GET", "/test")
 
     assert client.rate_limit_status["minute_limit"] is None
+
+
+async def test_429_message_never_renders_none_for_a_missing_limit(client: ApolloClient):
+    """Apollo can send `*-requests-left` without its `*-rate-limit-*` partner.
+    Interpolating the missing one gave "0/None", which reads like a parsing bug in
+    the very message someone is using to diagnose one (peqy review)."""
+    _raise_429(client, {"x-24-hour-requests-left": "0"})
+    with pytest.raises(RateLimitError) as exc:
+        await client._request("POST", "/notes")
+
+    message = str(exc.value)
+    assert "None" not in message
+    assert "daily 0/unreported" in message
+
+
+async def test_retry_after_zero_is_preserved_not_dropped(client: ApolloClient):
+    """`Retry-After: 0` means "retry immediately" and must survive as 0, not become
+    None. It does: the header is a STRING, and "0" is truthy — so the falsy check
+    rejects only "" and absent. Pinned because it reads like a classic
+    truthiness bug and was raised as one in review."""
+    _raise_429(client, _limits(daily=(2000, 0), retry_after="0"))
+    with pytest.raises(RateLimitError) as exc:
+        await client._request("POST", "/notes")
+
+    assert exc.value.retry_after == 0
+
+
+async def test_retry_after_absent_or_empty_is_none(client: ApolloClient):
+    for value in (None, ""):
+        headers = _limits(daily=(2000, 0))
+        if value is not None:
+            headers["Retry-After"] = value
+        _raise_429(client, headers)
+        with pytest.raises(RateLimitError) as exc:
+            await client._request("POST", "/notes")
+        assert exc.value.retry_after is None

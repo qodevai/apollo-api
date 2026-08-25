@@ -190,15 +190,27 @@ def _parse_limit_headers(headers: Any) -> dict[str, int | None]:
     return parsed
 
 
+def _format_bucket(window: str, limits: dict[str, int | None]) -> str:
+    """`minute 0/200`, or `minute 0/unreported` when Apollo omits the ceiling.
+
+    Apollo can send a `*-requests-left` header without its `*-rate-limit-*`
+    partner. Interpolating the missing one renders "0/None", which reads like a
+    parsing bug in the very message someone is using to diagnose one.
+    """
+    left = limits.get(f"{window}_left")
+    limit = limits.get(f"{window}_limit")
+    return f"{window} {left}/{limit if limit is not None else 'unreported'}"
+
+
 def _describe_exhaustion(endpoint: str, limits: dict[str, int | None]) -> str:
     """Name the endpoint and the window(s) that actually ran out."""
     spent = [
-        f"{window} {limits[f'{window}_left']}/{limits[f'{window}_limit']}"
+        _format_bucket(window, limits)
         for window, _lim, _left in _LIMIT_HEADERS
         if limits.get(f"{window}_left") == 0
     ]
     remaining = ", ".join(
-        f"{window} {limits[f'{window}_left']}/{limits[f'{window}_limit']}"
+        _format_bucket(window, limits)
         for window, _lim, _left in _LIMIT_HEADERS
         if limits.get(f"{window}_left") is not None
     )
