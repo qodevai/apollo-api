@@ -1559,3 +1559,166 @@ async def test_find_by_linkedin_url_not_found(client: ApolloClient):
     )
 
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Rate-limit reporting
+# ---------------------------------------------------------------------------
+#
+# The 429 message used to be the constant "Rate limit exceeded. Apollo limits:
+# 400/hour, 200/min, 2000/day" — it read identically whether the minute, the
+# hour or the day was spent, and on which endpoint. Apollo meters PER ENDPOINT,
+# so that ambiguity hid a job burning one endpoint's daily budget while every
+# other endpoint on the same key sat untouched.
+
+
+def _limits(minute=(200, 200), hourly=(400, 400), daily=(2000, 2000), retry_after=None):
+    headers = {}
+    for (limit, left), (lim_h, left_h) in (
+        (minute, ("x-rate-limit-minute", "x-minute-requests-left")),
+        (hourly, ("x-rate-limit-hourly", "x-hourly-requests-left")),
+        (daily, ("x-rate-limit-24-hour", "x-24-hour-requests-left")),
+    ):
+        if limit is not None:
+            headers[lim_h] = str(limit)
+        if left is not None:
+            headers[left_h] = str(left)
+    if retry_after:
+        headers["Retry-After"] = retry_after
+    return headers
+
+
+def _raise_429(client: ApolloClient, headers: dict) -> None:
+    error_response = MagicMock()
+    error_response.status_code = 429
+    error_response.text = "HTTP 429 error"
+    error_response.headers = headers
+    client._client.request.return_value = _make_response({})
+    client._client.request.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "429", request=MagicMock(), response=error_response
+    )
+
+
+async def test_429_names_the_endpoint_and_the_exhausted_window(client: ApolloClient):
+    """The real prod case: daily spent, minute and hour untouched."""
+    _raise_429(client, _limits(daily=(2000, 0)))
+    with pytest.raises(RateLimitError) as exc:
+        await client._request("POST", "/notes")
+
+    message = str(exc.value)
+    assert "/notes" in message, "an operator must see WHICH endpoint ran out"
+    assert "daily 0/2000" in message
+    assert "exhausted" in message
+    assert exc.value.endpoint == "/notes"
+    assert exc.value.limits["daily_left"] == 0
+    assert exc.value.limits["hourly_left"] == 400
+
+
+async def test_429_distinguishes_minute_from_daily(client: ApolloClient):
+    """A burst and a spent daily budget need completely different responses:
+    wait a minute, or stop for the day."""
+    _raise_429(client, _limits(minute=(200, 0)))
+    with pytest.raises(RateLimitError) as exc:
+        await client._request("POST", "/notes")
+
+    assert "minute 0/200" in str(exc.value)
+    assert "daily" not in str(exc.value).split("exhausted")[0]
+
+
+async def test_429_reports_every_exhausted_window(client: ApolloClient):
+    _raise_429(client, _limits(hourly=(400, 0), daily=(2000, 0)))
+    with pytest.raises(RateLimitError) as exc:
+        await client._request("POST", "/notes")
+
+    message = str(exc.value)
+    assert "hourly 0/400" in message
+    assert "daily 0/2000" in message
+
+
+async def test_429_without_headers_does_not_invent_exhaustion(client: ApolloClient):
+    """Absence of a header is not a bucket at zero. Claiming exhaustion we never
+    observed is how a caller ends up backing off for the wrong reason."""
+    _raise_429(client, {})
+    with pytest.raises(RateLimitError) as exc:
+        await client._request("POST", "/notes")
+
+    assert "no rate-limit headers" in str(exc.value)
+    assert exc.value.limits["daily_left"] is None
+    assert "exhausted" not in str(exc.value)
+
+
+async def test_429_with_headers_but_none_at_zero_says_so(client: ApolloClient):
+    """Don't claim a window ran out when none reported zero — say the limit is
+    one Apollo doesn't expose, rather than inventing a culprit."""
+    _raise_429(client, _limits(daily=(2000, 5)))
+    with pytest.raises(RateLimitError) as exc:
+        await client._request("POST", "/notes")
+
+    assert "no bucket reported zero" in str(exc.value)
+
+
+async def test_429_still_carries_retry_after(client: ApolloClient):
+    _raise_429(client, _limits(daily=(2000, 0), retry_after="90"))
+    with pytest.raises(RateLimitError) as exc:
+        await client._request("POST", "/notes")
+
+    assert exc.value.retry_after == 90
+
+
+async def test_rate_limit_status_keeps_absent_headers_as_none(client: ApolloClient):
+    """`int(x or 0)` would report a missing header as zero — indistinguishable
+    from a genuinely spent bucket."""
+    response = _make_response({"ok": True})
+    response.headers = {"x-rate-limit-minute": "200", "x-minute-requests-left": "0"}
+    client._client.request.return_value = response
+
+    await client._request("GET", "/test")
+
+    assert client.rate_limit_status["minute_left"] == 0
+    assert client.rate_limit_status["daily_left"] is None
+
+
+async def test_rate_limit_status_survives_a_garbage_header(client: ApolloClient):
+    response = _make_response({"ok": True})
+    response.headers = {"x-rate-limit-minute": "not-a-number"}
+    client._client.request.return_value = response
+
+    await client._request("GET", "/test")
+
+    assert client.rate_limit_status["minute_limit"] is None
+
+
+async def test_429_message_never_renders_none_for_a_missing_limit(client: ApolloClient):
+    """Apollo can send `*-requests-left` without its `*-rate-limit-*` partner.
+    Interpolating the missing one gave "0/None", which reads like a parsing bug in
+    the very message someone is using to diagnose one (peqy review)."""
+    _raise_429(client, {"x-24-hour-requests-left": "0"})
+    with pytest.raises(RateLimitError) as exc:
+        await client._request("POST", "/notes")
+
+    message = str(exc.value)
+    assert "None" not in message
+    assert "daily 0/unreported" in message
+
+
+async def test_retry_after_zero_is_preserved_not_dropped(client: ApolloClient):
+    """`Retry-After: 0` means "retry immediately" and must survive as 0, not become
+    None. It does: the header is a STRING, and "0" is truthy — so the falsy check
+    rejects only "" and absent. Pinned because it reads like a classic
+    truthiness bug and was raised as one in review."""
+    _raise_429(client, _limits(daily=(2000, 0), retry_after="0"))
+    with pytest.raises(RateLimitError) as exc:
+        await client._request("POST", "/notes")
+
+    assert exc.value.retry_after == 0
+
+
+async def test_retry_after_absent_or_empty_is_none(client: ApolloClient):
+    for value in (None, ""):
+        headers = _limits(daily=(2000, 0))
+        if value is not None:
+            headers["Retry-After"] = value
+        _raise_429(client, headers)
+        with pytest.raises(RateLimitError) as exc:
+            await client._request("POST", "/notes")
+        assert exc.value.retry_after is None
