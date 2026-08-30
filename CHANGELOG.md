@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepts a `datetime` (ISO-serialised for you) as well as a preformatted string.
   Unset optionals stay out of the payload. `note` is optional too and is omitted
   rather than sent as an empty string; Apollo accepts a task without it (verified
-  against the live API).
+  against the live API). A **naive `due_at` is rejected** with a `ValueError` —
+  it would serialise without an offset and leave the intended instant ambiguous.
 
 - **`create_linkedin_connect_request(contact_id, note=None, ...)`** — a LinkedIn
   connection request that defaults to carrying no message. On a

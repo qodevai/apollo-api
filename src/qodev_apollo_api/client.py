@@ -1119,17 +1119,24 @@ class ApolloClient:
             note: Task description. Omitted from the payload when ``None``.
             type: Task type
             priority: Task priority
-            user_id: Task owner. Apollo rejects task creation with
-                ``{"error": "Invalid user or creator id"}`` unless a valid owner
-                is supplied, so pass this for every call.
-            due_at: When the task is due. Accepts a ``datetime`` (serialised to
-                ISO 8601) or an already-formatted string.
+            user_id: Task owner. Apollo has rejected creation with
+                ``{"error": "Invalid user or creator id"}`` whenever this was
+                omitted in our testing, so pass it. It stays optional because we
+                have only observed one key and cannot rule out setups where
+                Apollo infers the owner.
+            due_at: When the task is due. Accepts a timezone-aware ``datetime``
+                (serialised to ISO 8601) or an already-formatted string. A naive
+                ``datetime`` is rejected: it would serialise without an offset and
+                leave the intended instant ambiguous.
             title: Task title shown in Apollo. Internal only, never sent to the
                 contact.
             **fields: Additional fields (status, etc.)
 
         Returns:
             Created Task subclass matching the task type
+
+        Raises:
+            ValueError: if ``contact_ids`` is empty, or ``due_at`` is a naive datetime
         """
         if not contact_ids:
             raise ValueError("contact_ids must not be empty")
@@ -1144,7 +1151,16 @@ class ApolloClient:
         if user_id is not None:
             data["user_id"] = user_id
         if due_at is not None:
-            data["due_at"] = due_at.isoformat() if isinstance(due_at, datetime) else due_at
+            if isinstance(due_at, datetime):
+                if due_at.tzinfo is None or due_at.tzinfo.utcoffset(due_at) is None:
+                    raise ValueError(
+                        "due_at must be timezone-aware; a naive datetime serialises "
+                        "without an offset and leaves the instant ambiguous. "
+                        "Use e.g. datetime(..., tzinfo=UTC)."
+                    )
+                data["due_at"] = due_at.isoformat()
+            else:
+                data["due_at"] = due_at
         if title is not None:
             data["title"] = title
         result = await self._post("/tasks", data)

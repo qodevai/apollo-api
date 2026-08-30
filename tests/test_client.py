@@ -1000,6 +1000,14 @@ async def test_create_task_serialises_due_at_and_owner(client: ApolloClient):
     assert payload["title"] == "Internal title"
 
 
+async def test_create_task_rejects_naive_due_at(client: ApolloClient):
+    """A naive datetime is ambiguous on the wire, so it is refused up front."""
+    with pytest.raises(ValueError, match="timezone-aware"):
+        await client.create_task(contact_ids=["c1"], note="x", due_at=datetime(2026, 9, 22, 8, 0))
+
+    client._client.request.assert_not_called()
+
+
 async def test_create_task_accepts_due_at_string(client: ApolloClient):
     """A pre-formatted due_at string is passed through untouched."""
     client._client.request.return_value = _make_response(
