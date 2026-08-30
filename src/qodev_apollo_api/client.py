@@ -1104,34 +1104,112 @@ class ApolloClient:
     async def create_task(
         self,
         contact_ids: list[str],
-        note: str,
+        note: str | None = None,
         type: TaskType | str = TaskType.CONTACT_ACTION_ITEM,
         priority: TaskPriority | str = TaskPriority.MEDIUM,
+        user_id: str | None = None,
+        due_at: datetime | str | None = None,
+        title: str | None = None,
         **fields,
     ) -> Task:
         """Create a task.
 
         Args:
             contact_ids: List of contact IDs
-            note: Task description
+            note: Task description. Omitted from the payload when ``None``.
             type: Task type
             priority: Task priority
-            **fields: Additional fields (due_at, status, etc.)
+            user_id: Task owner. Apollo has rejected creation with
+                ``{"error": "Invalid user or creator id"}`` whenever this was
+                omitted in our testing, so pass it. It stays optional because we
+                have only observed one key and cannot rule out setups where
+                Apollo infers the owner.
+            due_at: When the task is due. Accepts a timezone-aware ``datetime``
+                (serialised to ISO 8601) or an already-formatted string. A naive
+                ``datetime`` is rejected: it would serialise without an offset and
+                leave the intended instant ambiguous.
+            title: Task title shown in Apollo. Internal only, never sent to the
+                contact.
+            **fields: Additional fields (status, etc.)
 
         Returns:
             Created Task subclass matching the task type
+
+        Raises:
+            ValueError: if ``contact_ids`` is empty, or ``due_at`` is a naive datetime
         """
         if not contact_ids:
             raise ValueError("contact_ids must not be empty")
-        data = {
+        data: dict[str, Any] = {
             "contact_ids": contact_ids,
-            "note": note,
             "type": type,
             "priority": priority,
             **fields,
         }
+        if note is not None:
+            data["note"] = note
+        if user_id is not None:
+            data["user_id"] = user_id
+        if due_at is not None:
+            if isinstance(due_at, datetime):
+                if due_at.tzinfo is None or due_at.tzinfo.utcoffset(due_at) is None:
+                    raise ValueError(
+                        "due_at must be timezone-aware; a naive datetime serialises "
+                        "without an offset and leaves the instant ambiguous. "
+                        "Use e.g. datetime(..., tzinfo=UTC)."
+                    )
+                data["due_at"] = due_at.isoformat()
+            else:
+                data["due_at"] = due_at
+        if title is not None:
+            data["title"] = title
         result = await self._post("/tasks", data)
         return resolve_task(result.get("task", result))
+
+    async def create_linkedin_connect_request(
+        self,
+        contact_id: str,
+        note: str | None = None,
+        title: str | None = None,
+        user_id: str | None = None,
+        priority: TaskPriority | str = TaskPriority.HIGH,
+        due_at: datetime | str | None = None,
+        **fields,
+    ) -> Task:
+        """Create a LinkedIn connection request.
+
+        Defaults to a plain request with **no message**, which is what LinkedIn
+        shows when the invitation carries no note.
+
+        On a ``linkedin_step_connect`` task the note travels with the invitation,
+        so anything passed as ``note`` is seen by the recipient. Internal context
+        belongs in ``title``, which stays inside Apollo. Use
+        :meth:`create_linkedin_connect_task` when you want Apollo's structured
+        outreach message payload instead of a plain note.
+
+        Args:
+            contact_id: Contact to send the connection request to
+            note: Text sent with the invitation. ``None`` (the default) sends a
+                plain connection request with no message.
+            title: Internal task title shown in Apollo (never sent to the contact)
+            user_id: Task owner (see :meth:`create_task`)
+            priority: Task priority (default: high)
+            due_at: When the task is due
+            **fields: Additional task fields
+
+        Returns:
+            Created Task for the connection request
+        """
+        return await self.create_task(
+            contact_ids=[contact_id],
+            note=note,
+            type=TaskType.LINKEDIN_STEP_CONNECT,
+            priority=priority,
+            user_id=user_id,
+            due_at=due_at,
+            title=title,
+            **fields,
+        )
 
     async def complete_task(self, task_id: str, note: str | None = None) -> Task:
         """Mark a task as completed.

@@ -980,6 +980,92 @@ async def test_create_task(client: ApolloClient):
     assert payload["priority"] == "high"
 
 
+async def test_create_task_serialises_due_at_and_owner(client: ApolloClient):
+    """due_at datetimes are ISO-serialised; user_id and title are passed through."""
+    client._client.request.return_value = _make_response(
+        {"task": {"id": "t_due", "type": "contact_action_item"}}
+    )
+
+    await client.create_task(
+        contact_ids=["c1"],
+        note="Follow up",
+        user_id="u1",
+        due_at=datetime(2026, 9, 22, 8, 0, tzinfo=UTC),
+        title="Internal title",
+    )
+
+    payload = client._client.request.call_args[1]["json"]
+    assert payload["user_id"] == "u1"
+    assert payload["due_at"] == "2026-09-22T08:00:00+00:00"
+    assert payload["title"] == "Internal title"
+
+
+async def test_create_task_rejects_naive_due_at(client: ApolloClient):
+    """A naive datetime is ambiguous on the wire, so it is refused up front."""
+    with pytest.raises(ValueError, match="timezone-aware"):
+        await client.create_task(contact_ids=["c1"], note="x", due_at=datetime(2026, 9, 22, 8, 0))
+
+    client._client.request.assert_not_called()
+
+
+async def test_create_task_accepts_due_at_string(client: ApolloClient):
+    """A pre-formatted due_at string is passed through untouched."""
+    client._client.request.return_value = _make_response(
+        {"task": {"id": "t_due2", "type": "contact_action_item"}}
+    )
+
+    await client.create_task(contact_ids=["c1"], note="x", due_at="2026-09-22T08:00:00Z")
+
+    assert client._client.request.call_args[1]["json"]["due_at"] == "2026-09-22T08:00:00Z"
+
+
+async def test_create_task_omits_unset_optionals(client: ApolloClient):
+    """user_id/due_at/title are absent from the payload when not supplied."""
+    client._client.request.return_value = _make_response(
+        {"task": {"id": "t_min", "type": "contact_action_item"}}
+    )
+
+    await client.create_task(contact_ids=["c1"], note="x")
+
+    payload = client._client.request.call_args[1]["json"]
+    assert "user_id" not in payload
+    assert "due_at" not in payload
+    assert "title" not in payload
+
+    # a note that was never supplied must not be sent as an empty string
+    await client.create_task(contact_ids=["c1"])
+    assert "note" not in client._client.request.call_args[1]["json"]
+
+
+async def test_create_linkedin_connect_request_sends_no_message(client: ApolloClient):
+    """The plain connection request carries an empty note and no message payload."""
+    client._client.request.return_value = _make_response(
+        {"task": {"id": "t_conn", "type": "linkedin_step_connect"}}
+    )
+
+    await client.create_linkedin_connect_request(
+        contact_id="c1", title="Connect Jane Doe", user_id="u1"
+    )
+
+    payload = client._client.request.call_args[1]["json"]
+    assert payload["type"] == "linkedin_step_connect"
+    assert "note" not in payload
+    assert payload["title"] == "Connect Jane Doe"
+    assert payload["priority"] == "high"
+    assert "standalone_outreach_task_message" not in payload
+
+
+async def test_create_linkedin_connect_request_forwards_a_note(client: ApolloClient):
+    """A note is still supported; it travels with the invitation when supplied."""
+    client._client.request.return_value = _make_response(
+        {"task": {"id": "t_conn2", "type": "linkedin_step_connect"}}
+    )
+
+    await client.create_linkedin_connect_request(contact_id="c1", note="Hi Jane, ...")
+
+    assert client._client.request.call_args[1]["json"]["note"] == "Hi Jane, ..."
+
+
 async def test_create_task_empty_contact_ids_raises(client: ApolloClient):
     """Test ValueError when contact_ids is empty."""
     with pytest.raises(ValueError, match="contact_ids must not be empty"):
