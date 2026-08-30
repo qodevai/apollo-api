@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`create_task` takes `user_id`, `due_at` and `title` directly.** Apollo rejects
+  task creation with `{"error": "Invalid user or creator id"}` unless an owner is
+  supplied, and the only way to set a due date was to know that `**fields` was
+  forwarded verbatim. Both are now named parameters, documented, and `due_at`
+  accepts a `datetime` (ISO-serialised for you) as well as a preformatted string.
+  Unset optionals stay out of the payload. `note` is optional too and is omitted
+  rather than sent as an empty string; Apollo accepts a task without it (verified
+  against the live API).
+
+- **`create_linkedin_connect_request(contact_id, note=None, ...)`** — a LinkedIn
+  connection request that defaults to carrying no message. On a
+  `linkedin_step_connect` task the note travels with the invitation, so `note`
+  defaults to `None` and the docstring says plainly that whatever you pass is seen
+  by the recipient; internal context goes in `title`, which stays inside Apollo.
+  `create_linkedin_connect_task` remains for Apollo's structured outreach message
+  payload.
+
 ### Changed
 
 - **`RateLimitError` now reports what Apollo actually said.** The message was the
