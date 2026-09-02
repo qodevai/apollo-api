@@ -181,6 +181,13 @@ deals = await client.search_deals(
 
 # Get by ID
 deal = await client.get_deal("deal_id")
+
+# Update fields (PATCH /opportunities/{id})
+deal = await client.update_opportunity(
+    "deal_id",
+    next_step="Send contract",
+    next_step_date="2026-09-07",
+)
 ```
 
 ### Pipelines & Stages
@@ -224,6 +231,9 @@ result = await client.create_note(
     contact_ids=["contact_id"],
     account_ids=["account_id"],
 )
+
+# Get a note by ID
+note = await client.get_note("note_id")
 ```
 
 ### Activities
@@ -285,6 +295,8 @@ except RateLimitError as e:
 except APIError as e:
     print(f"API error: {e} (status: {e.status_code})")
 ```
+
+`update_opportunity_roles` can also raise `RoleAssignmentError` (`.opportunity_id`, `.missing_contact_ids`) if Apollo reports a successful write but the role isn't present on a post-write read-back — see [CLAUDE.md](CLAUDE.md) for the underlying quirk.
 
 ## Development
 

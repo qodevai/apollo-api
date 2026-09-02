@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
-from .exceptions import APIError, AuthenticationError, RateLimitError
+from .exceptions import APIError, AuthenticationError, RateLimitError, RoleAssignmentError
 from .models import (
     Account,
     AccountDetail,
@@ -360,6 +360,10 @@ class ApolloClient:
         """Make PUT request."""
         return await self._request("PUT", endpoint, json=data)
 
+    async def _patch(self, endpoint: str, data: dict) -> dict:
+        """Make PATCH request."""
+        return await self._request("PATCH", endpoint, json=data)
+
     # ========================================================================
     # CONTACTS
     # ========================================================================
@@ -654,6 +658,31 @@ class ApolloClient:
         result = await self._post("/opportunities", data)
         return Deal.model_validate(result.get("opportunity", result))
 
+    async def update_opportunity(self, opportunity_id: str, **fields) -> Deal:
+        """Update a deal/opportunity's fields.
+
+        Uses ``PATCH /opportunities/{id}`` — live-verified against the real API
+        (2026-09-02). This is a different endpoint from ``create_deal``'s
+        ``POST /opportunities``. Works with a normal (non-master) API key.
+
+        Args:
+            opportunity_id: The opportunity/deal ID.
+            **fields: Fields to update. Commonly: ``name``, ``amount``,
+                ``opportunity_stage_id``, ``closed_date`` [YYYY-MM-DD],
+                ``account_id``, ``owner_id``, ``next_step``,
+                ``next_step_date`` [YYYY-MM-DD], ``description``.
+
+        Returns:
+            The updated Deal model.
+
+        Raises:
+            ValueError: If no fields are provided.
+        """
+        if not fields:
+            raise ValueError("At least one field must be provided")
+        result = await self._patch(f"/opportunities/{opportunity_id}", fields)
+        return Deal.model_validate(result.get("opportunity", result))
+
     # ========================================================================
     # PIPELINES & STAGES
     # ========================================================================
@@ -777,7 +806,17 @@ class ApolloClient:
             roles: The complete list of contact-role entries to set.
 
         Returns:
-            The updated Deal.
+            The updated Deal, freshly re-read after the write (see Raises).
+
+        Raises:
+            RoleAssignmentError: Apollo has been observed to return this
+                endpoint's 200 response with the deal JSON while **not**
+                persisting the write (read-back showed 0 roles minutes after a
+                call that reported no error; the identical call succeeded on
+                retry). The write response can't be trusted on its own, so this
+                method always re-reads the opportunity afterwards and raises
+                instead of silently returning stale/wrong role data if any
+                requested ``contact_id`` is missing from the read-back.
         """
         # Apollo's endpoint expects each entry's role type *nested* under a ``role``
         # array — sending ``opportunity_contact_role_type_id`` flat on the entry (with
@@ -799,8 +838,26 @@ class ApolloClient:
             )
 
         data = {"opportunity_id": opportunity_id, "roles": wire_roles}
-        result = await self._post("/opportunities/update_roles", data)
-        return Deal.model_validate(result.get("opportunity", result))
+        await self._post("/opportunities/update_roles", data)
+
+        # The write response has been observed to lie (200 + deal JSON, role not
+        # actually persisted) — never trust it. Always re-read before returning.
+        deal = await self.get_deal(opportunity_id)
+        persisted_contact_ids = {
+            r.contact_id for r in deal.opportunity_contact_roles if r.contact_id
+        }
+        requested_contact_ids = {entry["contact_id"] for entry in roles}
+        missing = sorted(requested_contact_ids - persisted_contact_ids)
+        if missing:
+            raise RoleAssignmentError(
+                f"update_opportunity_roles: Apollo reported success writing roles "
+                f"on opportunity {opportunity_id!r}, but contact(s) {missing} are "
+                f"missing from a fresh read-back. Apollo has silently dropped this "
+                f"write before (the identical call succeeded on retry) — retry.",
+                opportunity_id=opportunity_id,
+                missing_contact_ids=missing,
+            )
+        return deal
 
     # ========================================================================
     # CUSTOM FIELDS
@@ -936,6 +993,30 @@ class ApolloClient:
             total=pagination.get("total_entries", len(notes)),
             page=page,
         )
+
+    async def get_note(self, note_id: str) -> Note:
+        """Get a note by ID.
+
+        Note:
+            The response-wrapping key was **not** live-verified — ``/notes/search``
+            (a separate endpoint/quota bucket) was exhausted for the day during
+            development. This follows the ``{"<singular>": {...}}`` convention
+            every other ``get_*``/detail method uses (``get_contact``,
+            ``get_account``, ``get_deal``, ...), falling back to the raw response
+            body if Apollo doesn't wrap it under ``"note"``.
+
+        Args:
+            note_id: Apollo note ID.
+
+        Returns:
+            Note model (content converted from ProseMirror JSON to Markdown, same
+            as ``search_notes()``).
+        """
+        result = await self._get(f"/notes/{note_id}")
+        note_data = result.get("note", result)
+        content_json = note_data.get("content", "{}")
+        title, markdown = prosemirror_to_markdown(content_json)
+        return Note.model_validate({**note_data, "title": title, "content": markdown})
 
     async def create_note(
         self,

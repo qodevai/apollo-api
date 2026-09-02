@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`update_opportunity(opportunity_id, **fields)`** — `PATCH /opportunities/{id}`, live-verified against the real API. Common fields: `name`, `amount`, `opportunity_stage_id`, `closed_date`, `account_id`, `owner_id`, `next_step`, `next_step_date`, `description`. Distinct from `create_deal`'s `POST /opportunities`. Raises `ValueError` if no fields are given.
+- **`get_note(note_id)`** — `GET /notes/{id}`, returns a `Note` with ProseMirror content converted to Markdown (same conversion as `search_notes()`). The response-wrapping key was not live-verifiable during development (`/notes/search`'s own daily quota was exhausted — see [CLAUDE.md](CLAUDE.md#5-api-quirks)); it follows the `{"note": {...}}` convention every other `get_*` method uses and falls back to the raw body if that key is absent.
+- `RoleAssignmentError` (new exception, exported from the package root) — raised by `update_opportunity_roles` when a requested role isn't present on a post-write read-back. Carries `.opportunity_id` and `.missing_contact_ids`.
+
+### Fixed
+
+- **`update_opportunity_roles` now fails loud instead of silently returning a role that was never persisted.** Live-observed: a set-role call returned Apollo's 200 + deal JSON with no error while the role was **not** actually saved (a read-back minutes later showed 0 roles); the identical call succeeded on retry. The write response can no longer be trusted on its own — the method now always re-reads the opportunity after writing and raises `RoleAssignmentError` if any requested `contact_id` is missing from the fresh read-back, instead of returning the (possibly stale/wrong) write response.
+
 ## [0.6.0] - 2026-08-31
 
 ### Added

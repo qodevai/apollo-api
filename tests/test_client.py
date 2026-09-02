@@ -9,7 +9,12 @@ import httpx
 import pytest
 
 from qodev_apollo_api.client import ApolloClient
-from qodev_apollo_api.exceptions import APIError, AuthenticationError, RateLimitError
+from qodev_apollo_api.exceptions import (
+    APIError,
+    AuthenticationError,
+    RateLimitError,
+    RoleAssignmentError,
+)
 from qodev_apollo_api.models import (
     Account,
     AccountDetail,
@@ -552,6 +557,47 @@ async def test_search_notes(client: ApolloClient):
     assert client._client.request.call_args[0] == ("POST", "/notes/search")
 
 
+async def test_get_note(client: ApolloClient):
+    """Test GET /notes/{id} returns a Note with ProseMirror content converted to Markdown."""
+    prosemirror_json = (
+        '{"type":"doc","content":'
+        '[{"type":"noteTitle","content":[{"type":"text","text":"My Title"}]},'
+        '{"type":"paragraph","content":[{"type":"text","text":"Hello world"}]}]}'
+    )
+    client._client.request.return_value = _make_response(
+        {
+            "note": {
+                "id": "n1",
+                "content": prosemirror_json,
+                "contact_ids": ["c1"],
+                "opportunity_ids": ["d1"],
+            }
+        }
+    )
+
+    result = await client.get_note("n1")
+
+    assert isinstance(result, Note)
+    assert result.id == "n1"
+    assert result.title == "My Title"
+    assert result.content == "Hello world"
+    assert result.contact_ids == ["c1"]
+    assert result.opportunity_ids == ["d1"]
+    client._client.request.assert_called_once_with("GET", "/notes/n1")
+
+
+async def test_get_note_unwrapped_response(client: ApolloClient):
+    """A response with no ``note`` wrapper key is used as-is (defensive fallback,
+    matching create_deal's ``result.get(..., result)`` pattern) rather than raising
+    a ValidationError from an empty dict."""
+    client._client.request.return_value = _make_response({"id": "n2", "content": "{}"})
+
+    result = await client.get_note("n2")
+
+    assert isinstance(result, Note)
+    assert result.id == "n2"
+
+
 async def test_search_calendar_events(client: ApolloClient):
     """Test POST /calendar_events/search returns PaginatedResponse[CalendarEvent]."""
     client._client.request.return_value = _make_response(
@@ -685,6 +731,34 @@ async def test_create_deal_name_only(client: ApolloClient):
     assert client._client.request.call_args[1]["json"] == {"name": "Minimal"}
 
 
+async def test_update_opportunity(client: ApolloClient):
+    """Test PATCH /opportunities/{id} returns the updated Deal with the given fields."""
+    client._client.request.return_value = _make_response(
+        {"opportunity": {"id": "d1", "name": "Renamed", "next_step": "Send contract"}}
+    )
+
+    result = await client.update_opportunity(
+        "d1", name="Renamed", next_step="Send contract", next_step_date="2026-09-07"
+    )
+
+    assert isinstance(result, Deal)
+    assert result.id == "d1"
+
+    call_args = client._client.request.call_args
+    assert call_args[0] == ("PATCH", "/opportunities/d1")
+    assert call_args[1]["json"] == {
+        "name": "Renamed",
+        "next_step": "Send contract",
+        "next_step_date": "2026-09-07",
+    }
+
+
+async def test_update_opportunity_no_fields_raises(client: ApolloClient):
+    """Test ValueError when no fields are provided."""
+    with pytest.raises(ValueError, match="At least one field must be provided"):
+        await client.update_opportunity("d1")
+
+
 async def test_get_pipeline(client: ApolloClient):
     """Test GET /opportunity_pipelines/{id} returns Pipeline."""
     client._client.request.return_value = _make_response(
@@ -795,14 +869,26 @@ async def test_list_opportunity_contact_role_types(client: ApolloClient):
 
 
 async def test_update_opportunity_roles(client: ApolloClient):
-    """The flat RoleAssignment entries are reshaped into Apollo's nested ``role`` wire format.
+    """The flat RoleAssignment entries are reshaped into Apollo's nested ``role`` wire format,
+    and the opportunity is re-read after the write (see test_update_opportunity_roles_*).
 
     Regression: sending ``opportunity_contact_role_type_id`` flat on the entry (no
     ``role`` key) makes Apollo 422 with "undefined method 'map' for nil".
     """
-    client._client.request.return_value = _make_response(
-        {"opportunity": {"id": "d1", "name": "Big Deal"}}
+    write_response = _make_response({"opportunity": {"id": "d1", "name": "Big Deal"}})
+    reread_response = _make_response(
+        {
+            "opportunity": {
+                "id": "d1",
+                "name": "Big Deal",
+                "opportunity_contact_roles": [
+                    {"id": "ocr1", "contact_id": "c1", "is_primary": True},
+                    {"id": "ocr2", "contact_id": "c2", "is_primary": False},
+                ],
+            }
+        }
     )
+    client._client.request.side_effect = [write_response, reread_response]
 
     roles = [
         {"contact_id": "c1", "opportunity_contact_role_type_id": "rt1", "is_primary": True},
@@ -813,9 +899,9 @@ async def test_update_opportunity_roles(client: ApolloClient):
     assert isinstance(result, Deal)
     assert result.id == "d1"
 
-    call_args = client._client.request.call_args
-    assert call_args[0] == ("POST", "/opportunities/update_roles")
-    assert call_args[1]["json"] == {
+    write_call = client._client.request.call_args_list[0]
+    assert write_call[0] == ("POST", "/opportunities/update_roles")
+    assert write_call[1]["json"] == {
         "opportunity_id": "d1",
         "roles": [
             {
@@ -828,6 +914,59 @@ async def test_update_opportunity_roles(client: ApolloClient):
             {"contact_id": "c2", "is_primary": False, "role": [{"is_primary": False}]},
         ],
     }
+    reread_call = client._client.request.call_args_list[1]
+    assert reread_call[0] == ("GET", "/opportunities/d1")
+
+
+async def test_update_opportunity_roles_fails_loud_when_not_persisted(client: ApolloClient):
+    """Regression: Apollo has returned 200 + the deal JSON on a set-role write while
+    silently NOT persisting the role (read-back showed 0 roles; the identical call
+    succeeded on retry). The write response can't be trusted — always re-read, and
+    raise RoleAssignmentError instead of returning stale/wrong role data.
+    """
+    write_response = _make_response({"opportunity": {"id": "d1", "name": "Big Deal"}})
+    # Re-read shows the role was NOT actually persisted (0 roles, despite the write
+    # response reporting success).
+    reread_response = _make_response(
+        {"opportunity": {"id": "d1", "name": "Big Deal", "opportunity_contact_roles": []}}
+    )
+    client._client.request.side_effect = [write_response, reread_response]
+
+    roles = [{"contact_id": "c1", "is_primary": True}]
+
+    with pytest.raises(RoleAssignmentError) as exc_info:
+        await client.update_opportunity_roles("d1", roles)
+
+    assert exc_info.value.opportunity_id == "d1"
+    assert exc_info.value.missing_contact_ids == ["c1"]
+    assert "c1" in str(exc_info.value)
+
+
+async def test_update_opportunity_roles_partial_persistence_fails_loud(client: ApolloClient):
+    """Only some of the requested roles missing on read-back still raises, naming
+    just the missing contact(s)."""
+    write_response = _make_response({"opportunity": {"id": "d1"}})
+    reread_response = _make_response(
+        {
+            "opportunity": {
+                "id": "d1",
+                "opportunity_contact_roles": [
+                    {"id": "ocr1", "contact_id": "c1", "is_primary": True},
+                ],
+            }
+        }
+    )
+    client._client.request.side_effect = [write_response, reread_response]
+
+    roles = [
+        {"contact_id": "c1", "is_primary": True},
+        {"contact_id": "c2", "is_primary": False},
+    ]
+
+    with pytest.raises(RoleAssignmentError) as exc_info:
+        await client.update_opportunity_roles("d1", roles)
+
+    assert exc_info.value.missing_contact_ids == ["c2"]
 
 
 async def test_list_custom_fields(client: ApolloClient):

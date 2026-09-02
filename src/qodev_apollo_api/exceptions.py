@@ -52,3 +52,27 @@ class APIError(ApolloError):
         """
         self.status_code = status_code
         super().__init__(message)
+
+
+class RoleAssignmentError(ApolloError):
+    """Raised when ``update_opportunity_roles`` can't confirm its write stuck.
+
+    Apollo's ``/opportunities/update_roles`` has been observed to return 200
+    with the deal JSON while **not** persisting the write (a read-back minutes
+    later showed 0 roles; the identical call succeeded on retry). The write
+    response can't be trusted on its own, so ``update_opportunity_roles``
+    always re-reads the opportunity afterwards and raises this instead of
+    silently returning stale/wrong role data when a requested role is missing.
+    """
+
+    def __init__(self, message: str, opportunity_id: str, missing_contact_ids: list[str]):
+        """Initialize role assignment error.
+
+        Args:
+            message: Error message.
+            opportunity_id: The opportunity/deal ID the write targeted.
+            missing_contact_ids: Requested contact IDs absent from the read-back.
+        """
+        self.opportunity_id = opportunity_id
+        self.missing_contact_ids = missing_contact_ids
+        super().__init__(message)
