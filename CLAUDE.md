@@ -129,6 +129,15 @@ Apollo stores notes in ProseMirror JSON format. This library automatically conve
 - Sending `opportunity_contact_role_type_id` flat on the entry (no `role` key) makes Apollo 422 with `undefined method 'map' for nil`.
 - `update_opportunity_roles` reshapes the flat `RoleAssignment` entries into this wire format; callers still pass flat entries.
 - The endpoint **replaces** the full role set and works with a normal (non-master) API key.
+- **`opportunities/update_roles` can silently drop the write.** Live-observed: a set-role call returned 200 + the deal JSON with no error while the role was **not** persisted (a read-back minutes later showed 0 roles); the identical call succeeded on retry. `update_opportunity_roles` no longer trusts the write response — it always re-reads the opportunity afterwards and raises `RoleAssignmentError` if a requested role is missing from the read-back.
+
+**Opportunity updates use `PATCH`, not `PUT`:**
+- `update_opportunity(opportunity_id, **fields)` uses `PATCH /opportunities/{id}` (live-verified 2026-09-02) — unlike `update_contact`/`update_task`, which use `PUT`.
+
+**`/notes/search` has its own per-endpoint daily quota, separate from the account-wide numbers you'd guess from other endpoints:**
+- Live-observed (2026-09-02): `POST /notes/search` returned 429 with `x-24-hour-requests-left: 0` (Apollo's message named the internal route `meetings/api/v1/notes/finder`) while `/tasks`, `/contacts`, etc. on the same key still had budget. `GET /notes/{id}` is a **different** bucket (not exhausted at the same time).
+- Since 0.6.0, `RateLimitError.endpoint` and `.limits` report exactly which endpoint/window ran out — check `.endpoint` before assuming account-wide throttling from a single 429.
+- A report of `notes search --opportunity-id X` returning **0 items with no error** (not a 429) for a deal known to have notes could not be reproduced live during this investigation (the `/notes/search` daily quota was already exhausted by the time of testing). The client does not swallow non-2xx responses anywhere in the request path (verified via code review + a live repro of the 429 case above); if it recurs, capture `client.rate_limit_status` and the raw response alongside the empty result before assuming an index-lag bug on Apollo's side.
 
 ## Testing Strategy
 
