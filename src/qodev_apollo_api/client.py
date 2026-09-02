@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
-from .exceptions import APIError, AuthenticationError, RateLimitError
+from .exceptions import APIError, AuthenticationError, RateLimitError, RoleAssignmentError
 from .models import (
     Account,
     AccountDetail,
@@ -806,7 +806,17 @@ class ApolloClient:
             roles: The complete list of contact-role entries to set.
 
         Returns:
-            The updated Deal.
+            The updated Deal, freshly re-read after the write (see Raises).
+
+        Raises:
+            RoleAssignmentError: Apollo has been observed to return this
+                endpoint's 200 response with the deal JSON while **not**
+                persisting the write (read-back showed 0 roles minutes after a
+                call that reported no error; the identical call succeeded on
+                retry). The write response can't be trusted on its own, so this
+                method always re-reads the opportunity afterwards and raises
+                instead of silently returning stale/wrong role data if any
+                requested ``contact_id`` is missing from the read-back.
         """
         # Apollo's endpoint expects each entry's role type *nested* under a ``role``
         # array — sending ``opportunity_contact_role_type_id`` flat on the entry (with
@@ -828,8 +838,26 @@ class ApolloClient:
             )
 
         data = {"opportunity_id": opportunity_id, "roles": wire_roles}
-        result = await self._post("/opportunities/update_roles", data)
-        return Deal.model_validate(result.get("opportunity", result))
+        await self._post("/opportunities/update_roles", data)
+
+        # The write response has been observed to lie (200 + deal JSON, role not
+        # actually persisted) — never trust it. Always re-read before returning.
+        deal = await self.get_deal(opportunity_id)
+        persisted_contact_ids = {
+            r.contact_id for r in deal.opportunity_contact_roles if r.contact_id
+        }
+        requested_contact_ids = {entry["contact_id"] for entry in roles}
+        missing = sorted(requested_contact_ids - persisted_contact_ids)
+        if missing:
+            raise RoleAssignmentError(
+                f"update_opportunity_roles: Apollo reported success writing roles "
+                f"on opportunity {opportunity_id!r}, but contact(s) {missing} are "
+                f"missing from a fresh read-back. Apollo has silently dropped this "
+                f"write before (the identical call succeeded on retry) — retry.",
+                opportunity_id=opportunity_id,
+                missing_contact_ids=missing,
+            )
+        return deal
 
     # ========================================================================
     # CUSTOM FIELDS

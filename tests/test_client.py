@@ -9,7 +9,12 @@ import httpx
 import pytest
 
 from qodev_apollo_api.client import ApolloClient
-from qodev_apollo_api.exceptions import APIError, AuthenticationError, RateLimitError
+from qodev_apollo_api.exceptions import (
+    APIError,
+    AuthenticationError,
+    RateLimitError,
+    RoleAssignmentError,
+)
 from qodev_apollo_api.models import (
     Account,
     AccountDetail,
@@ -823,14 +828,26 @@ async def test_list_opportunity_contact_role_types(client: ApolloClient):
 
 
 async def test_update_opportunity_roles(client: ApolloClient):
-    """The flat RoleAssignment entries are reshaped into Apollo's nested ``role`` wire format.
+    """The flat RoleAssignment entries are reshaped into Apollo's nested ``role`` wire format,
+    and the opportunity is re-read after the write (see test_update_opportunity_roles_*).
 
     Regression: sending ``opportunity_contact_role_type_id`` flat on the entry (no
     ``role`` key) makes Apollo 422 with "undefined method 'map' for nil".
     """
-    client._client.request.return_value = _make_response(
-        {"opportunity": {"id": "d1", "name": "Big Deal"}}
+    write_response = _make_response({"opportunity": {"id": "d1", "name": "Big Deal"}})
+    reread_response = _make_response(
+        {
+            "opportunity": {
+                "id": "d1",
+                "name": "Big Deal",
+                "opportunity_contact_roles": [
+                    {"id": "ocr1", "contact_id": "c1", "is_primary": True},
+                    {"id": "ocr2", "contact_id": "c2", "is_primary": False},
+                ],
+            }
+        }
     )
+    client._client.request.side_effect = [write_response, reread_response]
 
     roles = [
         {"contact_id": "c1", "opportunity_contact_role_type_id": "rt1", "is_primary": True},
@@ -841,9 +858,9 @@ async def test_update_opportunity_roles(client: ApolloClient):
     assert isinstance(result, Deal)
     assert result.id == "d1"
 
-    call_args = client._client.request.call_args
-    assert call_args[0] == ("POST", "/opportunities/update_roles")
-    assert call_args[1]["json"] == {
+    write_call = client._client.request.call_args_list[0]
+    assert write_call[0] == ("POST", "/opportunities/update_roles")
+    assert write_call[1]["json"] == {
         "opportunity_id": "d1",
         "roles": [
             {
@@ -856,6 +873,59 @@ async def test_update_opportunity_roles(client: ApolloClient):
             {"contact_id": "c2", "is_primary": False, "role": [{"is_primary": False}]},
         ],
     }
+    reread_call = client._client.request.call_args_list[1]
+    assert reread_call[0] == ("GET", "/opportunities/d1")
+
+
+async def test_update_opportunity_roles_fails_loud_when_not_persisted(client: ApolloClient):
+    """Regression: Apollo has returned 200 + the deal JSON on a set-role write while
+    silently NOT persisting the role (read-back showed 0 roles; the identical call
+    succeeded on retry). The write response can't be trusted — always re-read, and
+    raise RoleAssignmentError instead of returning stale/wrong role data.
+    """
+    write_response = _make_response({"opportunity": {"id": "d1", "name": "Big Deal"}})
+    # Re-read shows the role was NOT actually persisted (0 roles, despite the write
+    # response reporting success).
+    reread_response = _make_response(
+        {"opportunity": {"id": "d1", "name": "Big Deal", "opportunity_contact_roles": []}}
+    )
+    client._client.request.side_effect = [write_response, reread_response]
+
+    roles = [{"contact_id": "c1", "is_primary": True}]
+
+    with pytest.raises(RoleAssignmentError) as exc_info:
+        await client.update_opportunity_roles("d1", roles)
+
+    assert exc_info.value.opportunity_id == "d1"
+    assert exc_info.value.missing_contact_ids == ["c1"]
+    assert "c1" in str(exc_info.value)
+
+
+async def test_update_opportunity_roles_partial_persistence_fails_loud(client: ApolloClient):
+    """Only some of the requested roles missing on read-back still raises, naming
+    just the missing contact(s)."""
+    write_response = _make_response({"opportunity": {"id": "d1"}})
+    reread_response = _make_response(
+        {
+            "opportunity": {
+                "id": "d1",
+                "opportunity_contact_roles": [
+                    {"id": "ocr1", "contact_id": "c1", "is_primary": True},
+                ],
+            }
+        }
+    )
+    client._client.request.side_effect = [write_response, reread_response]
+
+    roles = [
+        {"contact_id": "c1", "is_primary": True},
+        {"contact_id": "c2", "is_primary": False},
+    ]
+
+    with pytest.raises(RoleAssignmentError) as exc_info:
+        await client.update_opportunity_roles("d1", roles)
+
+    assert exc_info.value.missing_contact_ids == ["c2"]
 
 
 async def test_list_custom_fields(client: ApolloClient):

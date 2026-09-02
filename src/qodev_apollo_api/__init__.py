@@ -1,7 +1,13 @@
 """qodev-apollo-api — Async Python client for Apollo.io CRM API with full type safety."""
 
 from .client import ApolloClient
-from .exceptions import APIError, ApolloError, AuthenticationError, RateLimitError
+from .exceptions import (
+    APIError,
+    ApolloError,
+    AuthenticationError,
+    RateLimitError,
+    RoleAssignmentError,
+)
 from .models import (
     Account,
     AccountActionItemTask,
@@ -143,6 +149,7 @@ __all__ = [
     "Pipeline",
     "RateLimitError",
     "RoleAssignment",
+    "RoleAssignmentError",
     "SortOrder",
     "Stage",
     "Task",
