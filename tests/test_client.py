@@ -685,6 +685,34 @@ async def test_create_deal_name_only(client: ApolloClient):
     assert client._client.request.call_args[1]["json"] == {"name": "Minimal"}
 
 
+async def test_update_opportunity(client: ApolloClient):
+    """Test PATCH /opportunities/{id} returns the updated Deal with the given fields."""
+    client._client.request.return_value = _make_response(
+        {"opportunity": {"id": "d1", "name": "Renamed", "next_step": "Send contract"}}
+    )
+
+    result = await client.update_opportunity(
+        "d1", name="Renamed", next_step="Send contract", next_step_date="2026-09-07"
+    )
+
+    assert isinstance(result, Deal)
+    assert result.id == "d1"
+
+    call_args = client._client.request.call_args
+    assert call_args[0] == ("PATCH", "/opportunities/d1")
+    assert call_args[1]["json"] == {
+        "name": "Renamed",
+        "next_step": "Send contract",
+        "next_step_date": "2026-09-07",
+    }
+
+
+async def test_update_opportunity_no_fields_raises(client: ApolloClient):
+    """Test ValueError when no fields are provided."""
+    with pytest.raises(ValueError, match="At least one field must be provided"):
+        await client.update_opportunity("d1")
+
+
 async def test_get_pipeline(client: ApolloClient):
     """Test GET /opportunity_pipelines/{id} returns Pipeline."""
     client._client.request.return_value = _make_response(

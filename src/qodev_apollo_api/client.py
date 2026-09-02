@@ -360,6 +360,10 @@ class ApolloClient:
         """Make PUT request."""
         return await self._request("PUT", endpoint, json=data)
 
+    async def _patch(self, endpoint: str, data: dict) -> dict:
+        """Make PATCH request."""
+        return await self._request("PATCH", endpoint, json=data)
+
     # ========================================================================
     # CONTACTS
     # ========================================================================
@@ -652,6 +656,31 @@ class ApolloClient:
         """
         data = {"name": name, **fields}
         result = await self._post("/opportunities", data)
+        return Deal.model_validate(result.get("opportunity", result))
+
+    async def update_opportunity(self, opportunity_id: str, **fields) -> Deal:
+        """Update a deal/opportunity's fields.
+
+        Uses ``PATCH /opportunities/{id}`` — live-verified against the real API
+        (2026-09-02). This is a different endpoint from ``create_deal``'s
+        ``POST /opportunities``. Works with a normal (non-master) API key.
+
+        Args:
+            opportunity_id: The opportunity/deal ID.
+            **fields: Fields to update. Commonly: ``name``, ``amount``,
+                ``opportunity_stage_id``, ``closed_date`` [YYYY-MM-DD],
+                ``account_id``, ``owner_id``, ``next_step``,
+                ``next_step_date`` [YYYY-MM-DD], ``description``.
+
+        Returns:
+            The updated Deal model.
+
+        Raises:
+            ValueError: If no fields are provided.
+        """
+        if not fields:
+            raise ValueError("At least one field must be provided")
+        result = await self._patch(f"/opportunities/{opportunity_id}", fields)
         return Deal.model_validate(result.get("opportunity", result))
 
     # ========================================================================
