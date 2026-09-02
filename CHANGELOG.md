@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-02
+
 ### Added
 
 - **`update_opportunity(opportunity_id, **fields)`** — `PATCH /opportunities/{id}`, live-verified against the real API. Common fields: `name`, `amount`, `opportunity_stage_id`, `closed_date`, `account_id`, `owner_id`, `next_step`, `next_step_date`, `description`. Distinct from `create_deal`'s `POST /opportunities`. Raises `ValueError` if no fields are given.
