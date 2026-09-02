@@ -994,6 +994,30 @@ class ApolloClient:
             page=page,
         )
 
+    async def get_note(self, note_id: str) -> Note:
+        """Get a note by ID.
+
+        Note:
+            The response-wrapping key was **not** live-verified — ``/notes/search``
+            (a separate endpoint/quota bucket) was exhausted for the day during
+            development. This follows the ``{"<singular>": {...}}`` convention
+            every other ``get_*``/detail method uses (``get_contact``,
+            ``get_account``, ``get_deal``, ...), falling back to the raw response
+            body if Apollo doesn't wrap it under ``"note"``.
+
+        Args:
+            note_id: Apollo note ID.
+
+        Returns:
+            Note model (content converted from ProseMirror JSON to Markdown, same
+            as ``search_notes()``).
+        """
+        result = await self._get(f"/notes/{note_id}")
+        note_data = result.get("note", result)
+        content_json = note_data.get("content", "{}")
+        title, markdown = prosemirror_to_markdown(content_json)
+        return Note.model_validate({**note_data, "title": title, "content": markdown})
+
     async def create_note(
         self,
         content: str,

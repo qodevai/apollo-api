@@ -557,6 +557,47 @@ async def test_search_notes(client: ApolloClient):
     assert client._client.request.call_args[0] == ("POST", "/notes/search")
 
 
+async def test_get_note(client: ApolloClient):
+    """Test GET /notes/{id} returns a Note with ProseMirror content converted to Markdown."""
+    prosemirror_json = (
+        '{"type":"doc","content":'
+        '[{"type":"noteTitle","content":[{"type":"text","text":"My Title"}]},'
+        '{"type":"paragraph","content":[{"type":"text","text":"Hello world"}]}]}'
+    )
+    client._client.request.return_value = _make_response(
+        {
+            "note": {
+                "id": "n1",
+                "content": prosemirror_json,
+                "contact_ids": ["c1"],
+                "opportunity_ids": ["d1"],
+            }
+        }
+    )
+
+    result = await client.get_note("n1")
+
+    assert isinstance(result, Note)
+    assert result.id == "n1"
+    assert result.title == "My Title"
+    assert result.content == "Hello world"
+    assert result.contact_ids == ["c1"]
+    assert result.opportunity_ids == ["d1"]
+    client._client.request.assert_called_once_with("GET", "/notes/n1")
+
+
+async def test_get_note_unwrapped_response(client: ApolloClient):
+    """A response with no ``note`` wrapper key is used as-is (defensive fallback,
+    matching create_deal's ``result.get(..., result)`` pattern) rather than raising
+    a ValidationError from an empty dict."""
+    client._client.request.return_value = _make_response({"id": "n2", "content": "{}"})
+
+    result = await client.get_note("n2")
+
+    assert isinstance(result, Note)
+    assert result.id == "n2"
+
+
 async def test_search_calendar_events(client: ApolloClient):
     """Test POST /calendar_events/search returns PaginatedResponse[CalendarEvent]."""
     client._client.request.return_value = _make_response(
